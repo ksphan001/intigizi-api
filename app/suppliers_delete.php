@@ -1,0 +1,67 @@
+<?php
+// File: app/suppliers_delete.php
+// Penjelasan: PENYEMPURNAAN FINAL - Menambahkan pengecekan dependensi sebelum menghapus.
+
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth_middleware.php';
+$userData = verify_jwt_token();
+$org_id = (int)$userData['org_id'];
+
+$data = json_decode(file_get_contents("php://input"));
+
+if (!isset($data->id)) {
+    http_response_code(400);
+    echo json_encode(['message' => 'ID supplier wajib diisi.']);
+    exit();
+}
+
+$id = (int)$data->id;
+
+$conn->begin_transaction();
+
+try {
+    // 1. Cek apakah supplier ini digunakan di purchase_orders
+    $checkSql = "SELECT po_code 
+                 FROM purchase_orders 
+                 WHERE supplier_id = ? AND organization_id = ? 
+                 LIMIT 1";
+    $checkStmt = $conn->prepare($checkSql);
+    $checkStmt->bind_param("ii", $id, $org_id);
+    $checkStmt->execute();
+    $result = $checkStmt->get_result();
+
+    if ($result->num_rows > 0) {
+        $row = $result->fetch_assoc();
+        throw new Exception("Supplier ini tidak dapat dihapus karena terhubung dengan Purchase Order '{$row['po_code']}'.", 409);
+    }
+    $checkStmt->close();
+    
+    // 2. Lanjutkan penghapusan jika tidak ada dependensi
+    $deleteSql = "DELETE FROM suppliers WHERE id = ? AND organization_id = ?";
+    $deleteStmt = $conn->prepare($deleteSql);
+    $deleteStmt->bind_param("ii", $id, $org_id);
+
+    if ($deleteStmt->execute()) {
+        if ($deleteStmt->affected_rows > 0) {
+            $conn->commit();
+            http_response_code(200);
+            echo json_encode(['message' => 'Supplier berhasil dihapus.']);
+        } else {
+            throw new Exception('Supplier tidak ditemukan atau Anda tidak memiliki akses.', 404);
+        }
+    } else {
+        throw new Exception('Gagal menghapus supplier: ' . $deleteStmt->error);
+    }
+    $deleteStmt->close();
+
+} catch (Exception $e) {
+    $conn->rollback();
+    $errorCode = $e->getCode() >= 400 && $e->getCode() < 600 ? $e->getCode() : 500;
+    http_response_code($errorCode);
+    echo json_encode(['message' => $e->getMessage()]);
+} finally {
+    if (isset($conn)) {
+        $conn->close();
+    }
+}
+?>
