@@ -42,11 +42,28 @@ try {
     $affected_rows = $stmt->affected_rows;
     $stmt->close();
 
+    // Jalankan query sinkronisasi data gizi
+    $sqlNd = "UPDATE nutrition_data nd
+              JOIN ingredients i ON nd.ingredient_id = i.id AND nd.organization_id = i.organization_id
+              JOIN master_ingredients mi ON i.master_ingredient_id = mi.id
+              SET 
+                  nd.calories = mi.calories,
+                  nd.protein = mi.protein,
+                  nd.carbohydrates = mi.carbohydrates,
+                  nd.fat = mi.fat,
+                  nd.fiber = mi.fiber,
+                  nd.bdd_percentage = mi.bdd_percentage
+              WHERE i.organization_id = ?";
+    $stmtNd = $conn->prepare($sqlNd);
+    $stmtNd->bind_param("i", $org_id);
+    $stmtNd->execute();
+    $stmtNd->close();
+
     $conn->commit();
 
     http_response_code(200);
     echo json_encode([
-        'message' => "Berhasil menyinkronkan harga bahan baku. $affected_rows bahan baku disesuaikan dengan harga acuan master."
+        'message' => "Berhasil menyinkronkan harga dan data gizi bahan baku. $affected_rows harga bahan baku disesuaikan dengan acuan master."
     ]);
 
 } catch (Throwable $e) {
