@@ -10,8 +10,8 @@ $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 $role_id = (int)$userData['role_id'];
 
-// Keamanan: Hanya Calon Mitra yang bisa mengakses
-if ($role_id !== 10) {
+// Keamanan: Hanya Calon Mitra (10) atau Yayasan (4) yang bisa mengakses
+if ($role_id !== 10 && $role_id !== 4) {
     http_response_code(403);
     echo json_encode(['message' => 'Akses ditolak untuk peran ini.']);
     exit();

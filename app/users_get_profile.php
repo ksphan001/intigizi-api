@@ -8,7 +8,7 @@ $userData = verify_jwt_token();
 $user_id = (int)$userData['id'];
 $org_id = (int)$userData['org_id'];
 
-$sql = "SELECT id, username, full_name, email, phone_number FROM users WHERE id = ? AND organization_id = ? LIMIT 1";
+$sql = "SELECT id, username, full_name, email, phone_number, role_id, str_number, str_expiry FROM users WHERE id = ? AND organization_id = ? LIMIT 1";
 $stmt = $conn->prepare($sql);
 $stmt->bind_param("ii", $user_id, $org_id);
 $stmt->execute();

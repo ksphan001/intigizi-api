@@ -112,3 +112,33 @@ function verify_jwt_token()
         exit();
     }
 }
+
+/**
+ * Mendapatkan daftar ID organisasi yang dapat diakses oleh user.
+ * Jika role adalah Yayasan (4), maka ia dapat mengakses organisasi induknya sendiri
+ * beserta seluruh organisasi anak (SPPG) di bawahnya.
+ */
+function get_accessible_organization_ids($userData, $conn)
+{
+    if (!isset($userData['org_id'])) {
+        return [];
+    }
+    
+    $org_id = (int)$userData['org_id'];
+    $org_ids = [$org_id];
+
+    if (isset($userData['role_id']) && (int)$userData['role_id'] === 4) {
+        $sql = "SELECT id FROM organizations WHERE parent_organization_id = ?";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param("i", $org_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        while ($row = $result->fetch_assoc()) {
+            $org_ids[] = (int)$row['id'];
+        }
+        $stmt->close();
+    }
+
+    return $org_ids;
+}
+?>

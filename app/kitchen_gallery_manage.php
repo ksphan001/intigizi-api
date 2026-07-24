@@ -9,8 +9,8 @@ require_once __DIR__ . '/auth_middleware.php';
 $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
-// Keamanan: Pastikan hanya Administrator (role_id = 7) yang bisa mengakses
-if ($userData['role_id'] != 7) {
+// Keamanan: Pastikan hanya Administrator (role_id = 7) atau Yayasan (role_id = 4) yang bisa mengakses
+if ($userData['role_id'] != 7 && $userData['role_id'] != 4) {
     http_response_code(403);
     echo json_encode(['message' => 'Akses ditolak.']);
     exit();

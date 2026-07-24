@@ -10,8 +10,8 @@ require_once __DIR__ . '/slug_helper.php';
 $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
-// Hanya Administrator (role_id = 7) yang bisa mengakses
-if ($userData['role_id'] != 7) {
+// Hanya Administrator (role_id = 7) atau Yayasan (role_id = 4) yang bisa mengakses
+if ($userData['role_id'] != 7 && $userData['role_id'] != 4) {
     http_response_code(403);
     echo json_encode(['message' => 'Akses ditolak.']);
     exit();
@@ -30,7 +30,7 @@ $conn->begin_transaction();
 
 try {
     // Ambil data path foto profil yang ada saat ini
-    $currentSettingsSql = "SELECT profile_picture, name FROM organizations WHERE id = ?";
+    $currentSettingsSql = "SELECT profile_picture, name, director_name, pic_name, pic_whatsapp FROM organizations WHERE id = ?";
     $currentSettingsStmt = $conn->prepare($currentSettingsSql);
     $currentSettingsStmt->bind_param("i", $org_id);
     $currentSettingsStmt->execute();
@@ -40,16 +40,20 @@ try {
     $new_profile_picture_path = $currentSettings['profile_picture'] ?? null; 
 
     // 1. Data Pengaturan Dapur
-    // --- PERBAIKAN: Ambil kitchen_name dari POST ---
     $kitchen_name = $data['kitchen_name'];
     $kitchen_address = $data['kitchen_address'];
     
     $latitude = isset($data['latitude']) && is_numeric($data['latitude']) ? (float)$data['latitude'] : null;
     $longitude = isset($data['longitude']) && is_numeric($data['longitude']) ? (float)$data['longitude'] : null;
 
-    // 2. Data Pengaturan Profil Publik
+    // 2. Data Pengaturan Profil Publik & Yayasan
     $slug = $data['slug'] ?? '';
     $public_description = $data['public_description'] ?? null;
+    
+    $name = $data['name'] ?? $currentSettings['name'];
+    $director_name = $data['director_name'] ?? ($currentSettings['director_name'] ?? null);
+    $pic_name = $data['pic_name'] ?? ($currentSettings['pic_name'] ?? null);
+    $pic_whatsapp = $data['pic_whatsapp'] ?? ($currentSettings['pic_whatsapp'] ?? null);
 
     // 3. Validasi Keunikan Slug
     if (!empty($slug)) {
@@ -62,7 +66,6 @@ try {
         }
         $checkStmt->close();
     } else {
-        // --- PERBAIKAN: Slug harus dibuat dari kitchen_name, bukan org name ---
         $slug = generate_unique_slug($kitchen_name, $conn);
     }
     
@@ -87,9 +90,9 @@ try {
     }
 
     // 5. Update tabel organizations
-    $orgSql = "UPDATE organizations SET slug = ?, public_description = ?, profile_picture = ? WHERE id = ?";
+    $orgSql = "UPDATE organizations SET slug = ?, public_description = ?, profile_picture = ?, name = ?, director_name = ?, pic_name = ?, pic_whatsapp = ? WHERE id = ?";
     $orgStmt = $conn->prepare($orgSql);
-    $orgStmt->bind_param("sssi", $slug, $public_description, $new_profile_picture_path, $org_id);
+    $orgStmt->bind_param("sssssssi", $slug, $public_description, $new_profile_picture_path, $name, $director_name, $pic_name, $pic_whatsapp, $org_id);
     $orgStmt->execute();
     $orgStmt->close();
 

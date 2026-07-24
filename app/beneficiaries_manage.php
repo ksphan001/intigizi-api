@@ -16,21 +16,43 @@ $method = $_SERVER['REQUEST_METHOD'];
 header('Content-Type: application/json');
 
 try {
+    $accessible_org_ids = get_accessible_organization_ids($userData, $conn);
+
     if ($method === 'GET') {
+        $selected_sppg_id = $_GET['sppg_id'] ?? 'all';
+        $target_org_ids = [];
+
+        if ($selected_sppg_id !== 'all' && is_numeric($selected_sppg_id)) {
+            $selected_sppg_id = (int)$selected_sppg_id;
+            if (in_array($selected_sppg_id, $accessible_org_ids)) {
+                $target_org_ids = [$selected_sppg_id];
+            } else {
+                $target_org_ids = [$org_id];
+            }
+        } else {
+            $target_org_ids = $accessible_org_ids;
+        }
+
+        $org_ids_str = implode(',', $target_org_ids);
+        if (empty($org_ids_str)) {
+            $org_ids_str = '0';
+        }
+
         // Ambil data, termasuk data BMI terbaru dan nama kategori
         $sql = "SELECT 
-                    b.id, b.full_name, b.nik_nisn, b.address, b.distribution_point_id,
+                    b.id, b.full_name, b.nik_nisn, b.address, b.distribution_point_id, b.organization_id,
                     b.phone_number, b.email, b.category_id,
                     b.current_weight_kg, b.current_height_cm, b.current_bmi,
                     dp.name as distribution_point_name,
-                    bc.name as category_name
+                    bc.name as category_name,
+                    o.name as organization_name
                 FROM beneficiaries b
                 LEFT JOIN distribution_points dp ON b.distribution_point_id = dp.id
                 LEFT JOIN beneficiary_categories bc ON b.category_id = bc.id
-                WHERE b.organization_id = ? 
+                LEFT JOIN organizations o ON b.organization_id = o.id
+                WHERE b.organization_id IN ($org_ids_str)
                 ORDER BY b.full_name ASC";
         $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $org_id);
         $stmt->execute();
         $result = $stmt->get_result();
         $data = $result->fetch_all(MYSQLI_ASSOC);
@@ -42,10 +64,12 @@ try {
 
         if ($action === 'delete') {
             $id = (int)$data->id;
-            // Hapus dari tabel utama (riwayat akan terhapus otomatis via ON DELETE CASCADE)
-            $sql = "DELETE FROM beneficiaries WHERE id = ? AND organization_id = ?";
+            $org_ids_str = implode(',', $accessible_org_ids);
+            if (empty($org_ids_str)) $org_ids_str = '0';
+            
+            $sql = "DELETE FROM beneficiaries WHERE id = ? AND organization_id IN ($org_ids_str)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ii", $id, $org_id);
+            $stmt->bind_param("i", $id);
             if ($stmt->execute()) {
                 if ($stmt->affected_rows > 0) {
                     echo json_encode(['message' => 'Data penerima manfaat berhasil dihapus.']);
@@ -56,7 +80,16 @@ try {
                 throw new Exception('Gagal menghapus data.');
             }
         } else { // Create or Update
-            // Validasi input baru
+            // Tentukan target organization_id (jika Yayasan ingin menambahkan/mengedit data SPPG anaknya)
+            $target_org_id = $org_id;
+            if (isset($userData['role_id']) && (int)$userData['role_id'] === 4 && isset($data->organization_id)) {
+                $check_org_id = (int)$data->organization_id;
+                if (in_array($check_org_id, $accessible_org_ids)) {
+                    $target_org_id = $check_org_id;
+                }
+            }
+
+            // Validasi input
             if (empty($data->full_name) || empty($data->address) || empty($data->distribution_point_id) || empty($data->category_id)) {
                 throw new Exception('Nama, alamat, kategori, dan titik distribusi wajib diisi.', 400);
             }
@@ -75,7 +108,7 @@ try {
             $point_id = (int)$data->distribution_point_id;
             $checkPointSql = "SELECT id FROM distribution_points WHERE id = ? AND organization_id = ?";
             $checkPointStmt = $conn->prepare($checkPointSql);
-            $checkPointStmt->bind_param("ii", $point_id, $org_id);
+            $checkPointStmt->bind_param("ii", $point_id, $target_org_id);
             $checkPointStmt->execute();
             if ($checkPointStmt->get_result()->num_rows === 0) {
                 $checkPointStmt->close();
@@ -92,20 +125,19 @@ try {
                             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     $stmt = $conn->prepare($sql);
                     $stmt->bind_param(
-                        "isssiisssdd", 
-                        $org_id, $data->full_name, $nik_nisn, $data->address, $data->distribution_point_id, $data->category_id,
+                                "isssiisssdd", 
+                        $target_org_id, $data->full_name, $nik_nisn, $data->address, $data->distribution_point_id, $data->category_id,
                         $data->phone_number, $data->email, $weight, $height, $bmi
                     );
                     
                     if ($stmt->execute()) {
                         $beneficiary_id = $conn->insert_id;
-                        // Jika data berat & tinggi diisi saat create, langsung catat di riwayat
                         if ($weight > 0 && $height > 0) {
                             $sql_history = "INSERT INTO beneficiary_bmi_history 
                                                 (organization_id, beneficiary_id, measurement_date, weight_kg, height_cm, bmi, recorded_by_user_id) 
                                             VALUES (?, ?, CURDATE(), ?, ?, ?, ?)";
                             $stmt_history = $conn->prepare($sql_history);
-                            $stmt_history->bind_param("iidddi", $org_id, $beneficiary_id, $weight, $height, $bmi, $user_id);
+                            $stmt_history->bind_param("iidddi", $target_org_id, $beneficiary_id, $weight, $height, $bmi, $user_id);
                             $stmt_history->execute();
                             $stmt_history->close();
                         }
@@ -129,17 +161,16 @@ try {
                         "sssiisssddii", 
                         $data->full_name, $nik_nisn, $data->address, $data->distribution_point_id, $data->category_id,
                         $data->phone_number, $data->email, $weight, $height, $bmi, 
-                        $id, $org_id
+                        $id, $target_org_id
                     );
                     
                     if ($stmt->execute()) {
-                         // Cek apakah data berat/tinggi di-update, jika ya, catat di riwayat
                         if ($weight > 0 && $height > 0) {
                              $sql_history = "INSERT INTO beneficiary_bmi_history 
                                                 (organization_id, beneficiary_id, measurement_date, weight_kg, height_cm, bmi, recorded_by_user_id) 
                                             VALUES (?, ?, CURDATE(), ?, ?, ?, ?)";
                             $stmt_history = $conn->prepare($sql_history);
-                            $stmt_history->bind_param("iidddi", $org_id, $id, $weight, $height, $bmi, $user_id);
+                            $stmt_history->bind_param("iidddi", $target_org_id, $id, $weight, $height, $bmi, $user_id);
                             $stmt_history->execute();
                             $stmt_history->close();
                         }
@@ -152,7 +183,7 @@ try {
                 }
             } catch (Throwable $e) {
                 $conn->rollback();
-                throw $e; // Lemparkan error ke block catch luar
+                throw $e;
             }
         }
     } else {

@@ -14,21 +14,23 @@ header('Expires: 0');
 $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
-// Hanya Administrator yang bisa mengakses
-if ($userData['role_id'] != 7) {
+// Hanya Administrator (7) atau Yayasan (4) yang bisa mengakses
+if ($userData['role_id'] != 7 && $userData['role_id'] != 4) {
     http_response_code(403);
     echo json_encode(['message' => 'Akses ditolak.']);
     exit();
 }
 
 try {
-    // --- PERBAIKAN DI SINI: Menambahkan dp.name ---
     $sql = "SELECT 
                 o.name, 
                 o.organization_type,
                 o.slug,
                 o.public_description,
                 o.profile_picture,
+                o.director_name,
+                o.pic_name,
+                o.pic_whatsapp,
                 dp.name as kitchen_name, 
                 dp.address as kitchen_address,
                 dp.latitude,

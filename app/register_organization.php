@@ -13,7 +13,7 @@ $data = json_decode(file_get_contents("php://input"), true);
 // 1. Validasi semua input yang diperlukan
 $registration_type = $data['registration_type'] ?? 'Mitra Dapur';
 $required_fields = ['org_name', 'pic_name', 'pic_email', 'pic_whatsapp', 'username', 'password', 'kitchen_name', 'kitchen_address', 'province_id', 'regency_id'];
-if ($registration_type === 'Mitra Dapur') {
+if ($registration_type === 'Mitra Dapur' || $registration_type === 'Yayasan / Pengelola SPPG') {
     $required_fields[] = 'director_name';
 }
 
@@ -75,9 +75,9 @@ try {
     if ($org_id == 0) throw new Exception("Gagal menyimpan data organisasi.");
     $orgStmt->close();
 
-    // 6. Buat akun pengguna (PIC/Administrator) untuk organisasi tersebut
+    // 6. Buat akun pengguna (PIC/Yayasan) untuk organisasi tersebut
     $hashed_password = password_hash($data['password'], PASSWORD_BCRYPT);
-    $userSql = "INSERT INTO users (organization_id, full_name, username, email, phone_number, password, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 7, ?)";
+    $userSql = "INSERT INTO users (organization_id, full_name, username, email, phone_number, password, role_id, is_active) VALUES (?, ?, ?, ?, ?, ?, 4, ?)";
     $userStmt = $conn->prepare($userSql);
     $userStmt->bind_param("isssssi", $org_id, $data['pic_name'], $data['username'], $data['pic_email'], $data['pic_whatsapp'], $hashed_password, $is_active);
     $userStmt->execute();

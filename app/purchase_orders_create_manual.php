@@ -35,10 +35,14 @@ try {
         $total_amount += (float)$item['quantity'] * (float)$item['price_per_unit'];
     }
 
+    $tax_ppn = isset($data['tax_ppn']) ? (float)$data['tax_ppn'] : 0.00;
+    $tax_pph = isset($data['tax_pph']) ? (float)$data['tax_pph'] : 0.00;
+    $net_amount = isset($data['net_amount']) ? (float)$data['net_amount'] : ($total_amount + $tax_ppn - $tax_pph);
+
     $po_code = "PO-MANUAL-" . date("Ymd") . "-" . strtoupper(substr(md5(time()), 0, 5));
-    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, status) VALUES (?, ?, NULL, ?, ?, 'Dikirim')";
+    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, tax_ppn, tax_pph, net_amount, status) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'Dikirim')";
     $poStmt = $conn->prepare($poSql);
-    $poStmt->bind_param("isid", $org_id, $po_code, $supplier_id, $total_amount);
+    $poStmt->bind_param("isidddd", $org_id, $po_code, $supplier_id, $total_amount, $tax_ppn, $tax_pph, $net_amount);
     $poStmt->execute();
     $po_id = $conn->insert_id;
     if ($po_id == 0) {
