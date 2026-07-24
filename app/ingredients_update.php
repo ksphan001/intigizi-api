@@ -32,10 +32,12 @@ $bdd_percentage = isset($data->bdd_percentage) ? (float)$data->bdd_percentage : 
 $conn->begin_transaction();
 
 try {
+    $qc_parameters = isset($data->qc_parameters) ? $conn->real_escape_string($data->qc_parameters) : null;
+
     // 1. Update tabel ingredients
-    $sql = "UPDATE ingredients SET name = ?, unit_id = ?, latest_price = ? WHERE id = ? AND organization_id = ?";
+    $sql = "UPDATE ingredients SET name = ?, unit_id = ?, latest_price = ?, qc_parameters = ? WHERE id = ? AND organization_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sidii", $name, $unit_id, $latest_price, $id, $org_id);
+    $stmt->bind_param("sidsii", $name, $unit_id, $latest_price, $qc_parameters, $id, $org_id);
     $stmt->execute();
     $stmt->close();
     

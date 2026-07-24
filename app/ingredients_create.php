@@ -30,9 +30,11 @@ $bdd_percentage = isset($data->bdd_percentage) ? (float)$data->bdd_percentage : 
 $conn->begin_transaction();
 
 try {
-    $sql = "INSERT INTO ingredients (organization_id, name, unit_id, latest_price) VALUES (?, ?, ?, ?)";
+    $qc_parameters = isset($data->qc_parameters) ? $conn->real_escape_string($data->qc_parameters) : null;
+
+    $sql = "INSERT INTO ingredients (organization_id, name, unit_id, latest_price, qc_parameters) VALUES (?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("isid", $org_id, $name, $unit_id, $latest_price);
+    $stmt->bind_param("isids", $org_id, $name, $unit_id, $latest_price, $qc_parameters);
     $stmt->execute();
 
     $ingredient_id = $conn->insert_id;

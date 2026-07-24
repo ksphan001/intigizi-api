@@ -21,7 +21,8 @@ try {
                 nd.carbohydrates,
                 nd.fat,
                 nd.fiber,
-                nd.bdd_percentage
+                nd.bdd_percentage,
+                i.qc_parameters
             FROM
                 ingredients i
             JOIN

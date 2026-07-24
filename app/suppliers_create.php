@@ -35,9 +35,12 @@ try {
     $checkUserStmt->close();
     // --- PERBAIKAN KEAMANAN SELESAI ---
 
-    $sql = "INSERT INTO suppliers (organization_id, supplier_name, user_id, address, contact_person) VALUES (?, ?, ?, ?, ?)";
+    $coverage_radius_km = isset($data->coverage_radius_km) ? (int)$data->coverage_radius_km : 15;
+    $coverage_area_desc = isset($data->coverage_area_desc) ? $conn->real_escape_string($data->coverage_area_desc) : null;
+
+    $sql = "INSERT INTO suppliers (organization_id, supplier_name, user_id, address, contact_person, coverage_radius_km, coverage_area_desc) VALUES (?, ?, ?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("isiss", $org_id, $supplier_name, $user_id, $address, $contact_person);
+    $stmt->bind_param("isissis", $org_id, $supplier_name, $user_id, $address, $contact_person, $coverage_radius_km, $coverage_area_desc);
 
     if ($stmt->execute()) {
         http_response_code(201);
