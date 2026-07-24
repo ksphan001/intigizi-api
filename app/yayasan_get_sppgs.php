@@ -32,6 +32,8 @@ try {
                     o.is_active, 
                     o.created_at,
                     dp.address,
+                    o.latitude,
+                    o.longitude,
                     u.email as pic_email,
                     u.username
                 FROM organizations o
@@ -199,16 +201,21 @@ try {
         }
         $dupStmt->close();
 
+        $lat = isset($data['latitude']) && is_numeric($data['latitude']) ? (float)$data['latitude'] : null;
+        $lng = isset($data['longitude']) && is_numeric($data['longitude']) ? (float)$data['longitude'] : null;
+
         // 3. Update organisasi anak
-        $orgUpdateSql = "UPDATE organizations SET name = ?, director_name = ?, pic_name = ?, pic_whatsapp = ?, province_id = ?, regency_id = ? WHERE id = ?";
+        $orgUpdateSql = "UPDATE organizations SET name = ?, director_name = ?, pic_name = ?, pic_whatsapp = ?, province_id = ?, regency_id = ?, latitude = ?, longitude = ? WHERE id = ?";
         $orgUpdateStmt = $conn->prepare($orgUpdateSql);
-        $orgUpdateStmt->bind_param("ssssssi", 
+        $orgUpdateStmt->bind_param("ssssssddi", 
             $data['name'], 
             $data['director_name'], 
             $data['pic_name'], 
             $data['pic_whatsapp'], 
             $data['province_id'], 
             $data['regency_id'], 
+            $lat,
+            $lng,
             $sppg_id
         );
         $orgUpdateStmt->execute();
@@ -229,9 +236,9 @@ try {
         $userUpdateStmt->close();
 
         // 5. Update detail dapur utama di distribution_points
-        $kitchenUpdateSql = "UPDATE distribution_points SET name = ?, address = ? WHERE organization_id = ? AND is_main_kitchen = 1";
+        $kitchenUpdateSql = "UPDATE distribution_points SET name = ?, address = ?, latitude = ?, longitude = ? WHERE organization_id = ? AND is_main_kitchen = 1";
         $kitchenUpdateStmt = $conn->prepare($kitchenUpdateSql);
-        $kitchenUpdateStmt->bind_param("ssi", $data['name'], $data['address'], $sppg_id);
+        $kitchenUpdateStmt->bind_param("ssddi", $data['name'], $data['address'], $lat, $lng, $sppg_id);
         $kitchenUpdateStmt->execute();
         $kitchenUpdateStmt->close();
 
