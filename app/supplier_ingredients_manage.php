@@ -27,11 +27,10 @@ if ($supplier_id <= 0) {
 
 try {
     if ($action === 'get') {
-        // Ambil semua bahan baku aktif dan status pemetaan untuk supplier ini
         $sql = "SELECT 
                     i.id as ingredient_id,
                     i.name as ingredient_name,
-                    u.unit_symbol as default_unit_symbol,
+                    u.symbol as default_unit_symbol,
                     COALESCE(si.base_price, i.latest_price) as base_price,
                     COALESCE(si.daily_capacity, 0.00) as daily_capacity,
                     CASE WHEN si.id IS NOT NULL THEN 1 ELSE 0 END as is_supplied
