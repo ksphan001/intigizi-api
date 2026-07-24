@@ -8,7 +8,7 @@ $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
 $sql = "SELECT
-            s.id, s.supplier_name, s.address, s.contact_person, s.coverage_radius_km, s.coverage_area_desc,
+            s.id, s.supplier_name, s.address, s.contact_person, s.coverage_radius_km, s.coverage_area_desc, s.latitude, s.longitude,
             u.id as user_id, u.username, u.email, u.phone_number
         FROM suppliers s
         JOIN users u ON s.user_id = u.id

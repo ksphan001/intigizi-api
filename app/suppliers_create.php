@@ -37,10 +37,12 @@ try {
 
     $coverage_radius_km = isset($data->coverage_radius_km) ? (int)$data->coverage_radius_km : 15;
     $coverage_area_desc = isset($data->coverage_area_desc) ? $conn->real_escape_string($data->coverage_area_desc) : null;
+    $latitude = isset($data->latitude) ? $conn->real_escape_string($data->latitude) : null;
+    $longitude = isset($data->longitude) ? $conn->real_escape_string($data->longitude) : null;
 
-    $sql = "INSERT INTO suppliers (organization_id, supplier_name, user_id, address, contact_person, coverage_radius_km, coverage_area_desc) VALUES (?, ?, ?, ?, ?, ?, ?)";
+    $sql = "INSERT INTO suppliers (organization_id, supplier_name, user_id, address, contact_person, coverage_radius_km, coverage_area_desc, latitude, longitude) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("isissis", $org_id, $supplier_name, $user_id, $address, $contact_person, $coverage_radius_km, $coverage_area_desc);
+    $stmt->bind_param("isississs", $org_id, $supplier_name, $user_id, $address, $contact_person, $coverage_radius_km, $coverage_area_desc, $latitude, $longitude);
 
     if ($stmt->execute()) {
         http_response_code(201);

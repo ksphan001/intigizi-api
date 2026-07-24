@@ -23,11 +23,13 @@ $contact_person = isset($data->contact_person) ? $conn->real_escape_string($data
 
 $coverage_radius_km = isset($data->coverage_radius_km) ? (int)$data->coverage_radius_km : 15;
 $coverage_area_desc = isset($data->coverage_area_desc) ? $conn->real_escape_string($data->coverage_area_desc) : null;
+$latitude = isset($data->latitude) ? $conn->real_escape_string($data->latitude) : null;
+$longitude = isset($data->longitude) ? $conn->real_escape_string($data->longitude) : null;
 
 try {
-    $sql = "UPDATE suppliers SET supplier_name = ?, user_id = ?, address = ?, contact_person = ?, coverage_radius_km = ?, coverage_area_desc = ? WHERE id = ? AND organization_id = ?";
+    $sql = "UPDATE suppliers SET supplier_name = ?, user_id = ?, address = ?, contact_person = ?, coverage_radius_km = ?, coverage_area_desc = ?, latitude = ?, longitude = ? WHERE id = ? AND organization_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("sisssiii", $supplier_name, $user_id, $address, $contact_person, $coverage_radius_km, $coverage_area_desc, $id, $org_id);
+    $stmt->bind_param("sisssisssi", $supplier_name, $user_id, $address, $contact_person, $coverage_radius_km, $coverage_area_desc, $latitude, $longitude, $id, $org_id);
     $stmt->execute();
 
     if ($stmt->affected_rows > 0) {
