@@ -63,19 +63,21 @@ try {
     $longitude = $supplierInfo['longitude'];
     $coverage_radius_km = (int)$supplierInfo['coverage_radius_km'];
 
+    $is_verified = (int)($supplierInfo['is_verified'] ?? 0);
+
     if ($existing) {
         $local_supplier_id = (int)$existing['id'];
         // Update
-        $upSql = "UPDATE suppliers SET supplier_name = ?, address = ?, contact_person = ?, phone_number = ?, latitude = ?, longitude = ?, coverage_radius_km = ? WHERE id = ?";
+        $upSql = "UPDATE suppliers SET supplier_name = ?, address = ?, contact_person = ?, phone_number = ?, latitude = ?, longitude = ?, coverage_radius_km = ?, is_verified = ? WHERE id = ?";
         $upStmt = $conn->prepare($upSql);
-        $upStmt->bind_param("ssssssii", $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $local_supplier_id);
+        $upStmt->bind_param("ssssssiii", $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $is_verified, $local_supplier_id);
         $upStmt->execute();
         $upStmt->close();
     } else {
         // Insert Baru
-        $insSql = "INSERT INTO suppliers (organization_id, supplier_name, address, contact_person, phone_number, latitude, longitude, coverage_radius_km, marketplace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $insSql = "INSERT INTO suppliers (organization_id, supplier_name, address, contact_person, phone_number, latitude, longitude, coverage_radius_km, marketplace_id, is_verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $insStmt = $conn->prepare($insSql);
-        $insStmt->bind_param("issssssii", $org_id, $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $marketplace_id);
+        $insStmt->bind_param("issssssiii", $org_id, $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $marketplace_id, $is_verified);
         $insStmt->execute();
         $local_supplier_id = $insStmt->insert_id;
         $insStmt->close();
