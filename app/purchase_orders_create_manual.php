@@ -21,7 +21,7 @@ if (!isset($data['supplier_id']) || !isset($data['items']) || !is_array($data['i
     exit();
 }
 
-$supplier_id = (int)$data['supplier_id'];
+$supplier_id = !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null;
 $items = $data['items'];
 $total_amount = 0;
 
@@ -40,7 +40,7 @@ try {
     $net_amount = isset($data['net_amount']) ? (float)$data['net_amount'] : ($total_amount + $tax_ppn - $tax_pph);
 
     $po_code = "PO-MANUAL-" . date("Ymd") . "-" . strtoupper(substr(md5(time()), 0, 5));
-    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, tax_ppn, tax_pph, net_amount, status) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'Dikirim')";
+    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, tax_ppn, tax_pph, net_amount, status) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'Selesai')"; // Belanja manual langsung selesai
     $poStmt = $conn->prepare($poSql);
     $poStmt->bind_param("isidddd", $org_id, $po_code, $supplier_id, $total_amount, $tax_ppn, $tax_pph, $net_amount);
     $poStmt->execute();
@@ -60,34 +60,36 @@ try {
     }
     $itemStmt->close();
 
-    // Logika notifikasi tidak perlu diubah karena sudah menggunakan array.
-    $vendor_user_id = null;
-    $vendor_org_id = null;
+    // Logika notifikasi (hanya jika ada supplier)
+    if ($supplier_id !== null && $supplier_id > 0) {
+        $vendor_user_id = null;
+        $vendor_org_id = null;
 
-    $vendorCheckSql = "SELECT u.id, u.organization_id FROM users u JOIN organizations o ON u.organization_id = o.id WHERE o.id = ? AND o.registration_type = 'Vendor' AND u.role_id = 5 LIMIT 1";
-    $vendorStmt = $conn->prepare($vendorCheckSql);
-    $vendorStmt->bind_param("i", $supplier_id);
-    $vendorStmt->execute();
-    if ($vendorRow = $vendorStmt->get_result()->fetch_assoc()) {
-        $vendor_user_id = $vendorRow['id'];
-        $vendor_org_id = $vendorRow['organization_id'];
-    }
-    $vendorStmt->close();
-
-    if (!$vendor_user_id) {
-        $supplierCheckSql = "SELECT user_id, organization_id FROM suppliers WHERE id = ?";
-        $supplierStmt = $conn->prepare($supplierCheckSql);
-        $supplierStmt->bind_param("i", $supplier_id);
-        $supplierStmt->execute();
-        if ($supplierRow = $supplierStmt->get_result()->fetch_assoc()) {
-            $vendor_user_id = $supplierRow['user_id'];
-            $vendor_org_id = $supplierRow['organization_id'];
+        $vendorCheckSql = "SELECT u.id, u.organization_id FROM users u JOIN organizations o ON u.organization_id = o.id WHERE o.id = ? AND o.registration_type = 'Vendor' AND u.role_id = 5 LIMIT 1";
+        $vendorStmt = $conn->prepare($vendorCheckSql);
+        $vendorStmt->bind_param("i", $supplier_id);
+        $vendorStmt->execute();
+        if ($vendorRow = $vendorStmt->get_result()->fetch_assoc()) {
+            $vendor_user_id = $vendorRow['id'];
+            $vendor_org_id = $vendorRow['organization_id'];
         }
-        $supplierStmt->close();
-    }
-    
-    if ($vendor_user_id && $vendor_org_id) {
-        send_notification($conn, $vendor_org_id, $vendor_user_id, "Pesanan Baru untuk Anda: {$po_code}", "Anda menerima pesanan baru yang perlu ditinjau.", "/app/vendor/orders");
+        $vendorStmt->close();
+
+        if (!$vendor_user_id) {
+            $supplierCheckSql = "SELECT user_id, organization_id FROM suppliers WHERE id = ?";
+            $supplierStmt = $conn->prepare($supplierCheckSql);
+            $supplierStmt->bind_param("i", $supplier_id);
+            $supplierStmt->execute();
+            if ($supplierRow = $supplierStmt->get_result()->fetch_assoc()) {
+                $vendor_user_id = $supplierRow['user_id'];
+                $vendor_org_id = $supplierRow['organization_id'];
+            }
+            $supplierStmt->close();
+        }
+        
+        if ($vendor_user_id && $vendor_org_id) {
+            send_notification($conn, $vendor_org_id, $vendor_user_id, "Pesanan Baru untuk Anda: {$po_code}", "Anda menerima pesanan baru yang perlu ditinjau.", "/app/vendor/orders");
+        }
     }
     
     $conn->commit();
