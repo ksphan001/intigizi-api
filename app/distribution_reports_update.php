@@ -23,6 +23,7 @@ $notes = isset($data['notes']) ? $conn->real_escape_string($data['notes']) : nul
 // --- DATA BARU ---
 $delivery_time = isset($data['delivery_time']) && !empty($data['delivery_time']) ? $conn->real_escape_string($data['delivery_time']) : null;
 $total_beneficiaries = isset($data['total_beneficiaries']) ? (int)$data['total_beneficiaries'] : null;
+$reported_by = isset($data['reported_by']) && !empty($data['reported_by']) ? (int)$data['reported_by'] : null;
 
 
 // --- VALIDASI GEOFENCING GPS ---
@@ -66,9 +67,9 @@ if (($status === 'Diterima' || $status === 'Sebagian Diterima') && isset($data['
 $conn->begin_transaction();
 try {
     // 1. Update data utama laporan distribusi
-    $sql = "UPDATE distribution_reports SET quantity_received = ?, status = ?, notes = ?, delivery_time = ?, total_beneficiaries = ? WHERE id = ? AND organization_id = ?";
+    $sql = "UPDATE distribution_reports SET quantity_received = ?, status = ?, notes = ?, delivery_time = ?, total_beneficiaries = ?, reported_by = COALESCE(?, reported_by) WHERE id = ? AND organization_id = ?";
     $stmt = $conn->prepare($sql);
-    $stmt->bind_param("isssiii", $quantity_received, $status, $notes, $delivery_time, $total_beneficiaries, $id, $org_id);
+    $stmt->bind_param("isssiiii", $quantity_received, $status, $notes, $delivery_time, $total_beneficiaries, $reported_by, $id, $org_id);
     $stmt->execute();
     $stmt->close();
 

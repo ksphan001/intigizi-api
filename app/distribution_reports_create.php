@@ -33,6 +33,8 @@ $delivery_time = isset($data['delivery_time']) && !empty($data['delivery_time'])
 $total_beneficiaries = isset($data['total_beneficiaries']) ? (int)$data['total_beneficiaries'] : null;
 $status = 'Terjadwal'; // Default status saat dijadwalkan
 
+$reported_by = isset($data['reported_by']) && !empty($data['reported_by']) ? (int)$data['reported_by'] : $user_id;
+
 $conn->begin_transaction();
 try {
     // Validasi Duplikasi
@@ -45,12 +47,10 @@ try {
     }
     $dupStmt->close();
 
-    // Query INSERT - PERBAIKAN DI SINI: Menggunakan parameter ? untuk status, bukan hardcode 'Dikirim'
+    // Query INSERT
     $sql = "INSERT INTO distribution_reports (organization_id, distribution_date, distribution_point_id, menu_id, quantity_sent, notes, reported_by, status, delivery_time, total_beneficiaries) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
     $stmt = $conn->prepare($sql);
-    
-    // bind_param updated: "isiiissssi" (status ditambahkan sebagai string)
-    $stmt->bind_param("isiiissssi", $org_id, $distribution_date, $distribution_point_id, $menu_id, $quantity_sent, $notes, $user_id, $status, $delivery_time, $total_beneficiaries);
+    $stmt->bind_param("isiiissssi", $org_id, $distribution_date, $distribution_point_id, $menu_id, $quantity_sent, $notes, $reported_by, $status, $delivery_time, $total_beneficiaries);
 
     if ($stmt->execute()) {
         $conn->commit();
