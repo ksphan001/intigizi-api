@@ -87,6 +87,15 @@ try {
     }
 
     $conn->commit();
+
+    // --- SINKRONISASI B2B MARKETPLACE ---
+    try {
+        require_once __DIR__ . '/marketplace_po_helper.php';
+        sync_po_to_marketplace($conn, $po_id, $org_id, $supplier_id);
+    } catch (Throwable $sync_err) {
+        // Biarkan gagal tanpa menggagalkan pengembalian sukses utama
+    }
+
     http_response_code(201);
     echo json_encode(['message' => 'Purchase Order berhasil dibuat dan notifikasi terkirim.', 'po_code' => $po_code]);
 

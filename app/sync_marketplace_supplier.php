@@ -65,20 +65,22 @@ try {
     $is_verified = (int)($supplierInfo['is_verified'] ?? 0);
     $average_rating = (float)($supplierInfo['average_rating'] ?? 0.00);
     $review_count = (int)($supplierInfo['review_count'] ?? 0);
+    $sla_score = (float)($supplierInfo['sla_score'] ?? 100.00);
+    $avg_process_time = (float)($supplierInfo['avg_process_time_hours'] ?? 0.00);
 
     if ($existing) {
         $local_supplier_id = (int)$existing['id'];
         // Update
-        $upSql = "UPDATE suppliers SET supplier_name = ?, address = ?, contact_person = ?, phone_number = ?, latitude = ?, longitude = ?, coverage_radius_km = ?, is_verified = ?, average_rating = ?, review_count = ? WHERE id = ?";
+        $upSql = "UPDATE suppliers SET supplier_name = ?, address = ?, contact_person = ?, phone_number = ?, latitude = ?, longitude = ?, coverage_radius_km = ?, is_verified = ?, average_rating = ?, review_count = ?, sla_score = ?, avg_process_time_hours = ? WHERE id = ?";
         $upStmt = $conn->prepare($upSql);
-        $upStmt->bind_param("ssssssiidii", $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $is_verified, $average_rating, $review_count, $local_supplier_id);
+        $upStmt->bind_param("ssssssiidiidi", $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $is_verified, $average_rating, $review_count, $sla_score, $avg_process_time, $local_supplier_id);
         $upStmt->execute();
         $upStmt->close();
     } else {
         // Insert Baru
-        $insSql = "INSERT INTO suppliers (organization_id, supplier_name, address, contact_person, phone_number, latitude, longitude, coverage_radius_km, marketplace_id, is_verified, average_rating, review_count) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $insSql = "INSERT INTO suppliers (organization_id, supplier_name, address, contact_person, phone_number, latitude, longitude, coverage_radius_km, marketplace_id, is_verified, average_rating, review_count, sla_score, avg_process_time_hours) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $insStmt = $conn->prepare($insSql);
-        $insStmt->bind_param("issssssiiidi", $org_id, $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $marketplace_id, $is_verified, $average_rating, $review_count);
+        $insStmt->bind_param("issssssiiididd", $org_id, $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $marketplace_id, $is_verified, $average_rating, $review_count, $sla_score, $avg_process_time);
         $insStmt->execute();
         $local_supplier_id = $insStmt->insert_id;
         $insStmt->close();

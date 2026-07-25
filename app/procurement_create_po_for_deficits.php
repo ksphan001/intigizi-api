@@ -98,6 +98,26 @@ try {
 
     $conn->commit();
 
+    // --- SINKRONISASI B2B MARKETPLACE ---
+    try {
+        require_once __DIR__ . '/marketplace_po_helper.php';
+        foreach ($created_pos as $po) {
+            // Kita butuh mencari supplier_id lokal asli dari purchase_orders untuk pencarian marketplace_id
+            $supSql = "SELECT supplier_id FROM purchase_orders WHERE id = ? LIMIT 1";
+            $supStmt = $conn->prepare($supSql);
+            $supStmt->bind_param("i", $po['po_id']);
+            $supStmt->execute();
+            $po_detail = $supStmt->get_result()->fetch_assoc();
+            $supStmt->close();
+
+            if ($po_detail) {
+                sync_po_to_marketplace($conn, $po['po_id'], $org_id, (int)$po_detail['supplier_id']);
+            }
+        }
+    } catch (Throwable $sync_err) {
+        // Biarkan gagal tanpa menggagalkan pengembalian sukses utama
+    }
+
     http_response_code(201);
     echo json_encode([
         'message' => 'PO otomatis berhasil dibuat secara terpisah.',
