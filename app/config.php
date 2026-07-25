@@ -37,15 +37,18 @@ if (in_array($origin, $allowed_origins)) {
 
 // Handle pre-flight request (OPTIONS method)
 // Ini penting agar request dengan header 'Authorization' untuk JWT bisa lewat
-if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
-    header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
-    header("Access-Control-Allow-Headers: Content-Type, Authorization");
+if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+    if (!headers_sent()) {
+        header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
+        header("Access-Control-Allow-Headers: Content-Type, Authorization");
+    }
     http_response_code(200);
     exit();
 }
 
-// Mengatur header default untuk semua response API menjadi JSON
-header('Content-Type: application/json');
+if (!headers_sent()) {
+    header('Content-Type: application/json');
+}
 
 
 // --- Database Connection ---
