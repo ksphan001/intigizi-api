@@ -45,13 +45,17 @@ try {
                     dr.delivery_time,
                     dr.total_beneficiaries,
                     dr.menu_id,
+                    dr.status,
                     m.menu_name,
                     dp.name AS point_name,
                     dp.latitude,
-                    dp.longitude
+                    dp.longitude,
+                    dr.reported_by as courier_id,
+                    u.name as courier_name
                  FROM distribution_reports dr
                  JOIN menus m ON dr.menu_id = m.id
                  JOIN distribution_points dp ON dr.distribution_point_id = dp.id
+                 LEFT JOIN users u ON dr.reported_by = u.id
                  WHERE dr.organization_id = ? AND dr.distribution_date = ?";
 
     $dist_stmt = $conn->prepare($dist_sql);
@@ -137,7 +141,10 @@ try {
             'total_beneficiaries' => $dist['total_beneficiaries'],
             'beneficiary_breakdown' => $beneficiary_breakdown,
             'nutrition' => $calc_nutrition,
-            'photos' => $photos
+            'photos' => $photos,
+            'courier_id' => $dist['courier_id'] ? (int)$dist['courier_id'] : null,
+            'courier_name' => $dist['courier_name'],
+            'status' => $dist['status']
         ];
     }
 
