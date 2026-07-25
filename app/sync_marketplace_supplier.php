@@ -20,7 +20,7 @@ $marketplace_id = (int)$data->marketplace_id;
 
 try {
     // 1. Fetch data dari API Marketplace
-    $marketplace_url = "http://localhost/intigizi-supplier-api/app/marketplace_suppliers.php?id=" . $marketplace_id;
+    $marketplace_url = "http://intigizi-supplier-api.test/app/marketplace_suppliers.php?id=" . $marketplace_id;
     
     // Gunakan cURL untuk memanggil API Marketplace
     $ch = curl_init();
