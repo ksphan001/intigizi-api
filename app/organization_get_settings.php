@@ -14,8 +14,8 @@ header('Expires: 0');
 $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
-// Hanya Administrator (7) atau Yayasan (4) yang bisa mengakses
-if ($userData['role_id'] != 7 && $userData['role_id'] != 4) {
+// Hanya Administrator (7), Yayasan (4), atau Tim Distribusi (6) yang bisa mengakses
+if ($userData['role_id'] != 7 && $userData['role_id'] != 4 && $userData['role_id'] != 6) {
     http_response_code(403);
     echo json_encode(['message' => 'Akses ditolak.']);
     exit();
