@@ -28,6 +28,19 @@ $longitude = isset($data->longitude) ? $conn->real_escape_string($data->longitud
 $phone_number = isset($data->phone_number) ? $conn->real_escape_string($data->phone_number) : null;
 
 try {
+    // Cek apakah supplier ini berasal dari marketplace
+    $checkSql = "SELECT marketplace_id FROM suppliers WHERE id = ? AND organization_id = ? LIMIT 1";
+    $checkStmt = $conn->prepare($checkSql);
+    $checkStmt->bind_param("ii", $id, $org_id);
+    $checkStmt->execute();
+    $existing = $checkStmt->get_result()->fetch_assoc();
+    $checkStmt->close();
+
+    if ($existing && !empty($existing['marketplace_id'])) {
+        http_response_code(403);
+        echo json_encode(['message' => 'Akses ditolak. Data supplier dari Marketplace terpusat tidak dapat diubah dari dapur lokal.']);
+        exit();
+    }
     $sql = "UPDATE suppliers SET supplier_name = ?, user_id = ?, address = ?, contact_person = ?, coverage_radius_km = ?, coverage_area_desc = ?, latitude = ?, longitude = ?, phone_number = ? WHERE id = ? AND organization_id = ?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("sisssissssi", $supplier_name, $user_id, $address, $contact_person, $coverage_radius_km, $coverage_area_desc, $latitude, $longitude, $phone_number, $id, $org_id);
