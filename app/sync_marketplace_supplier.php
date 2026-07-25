@@ -140,6 +140,32 @@ try {
     }
 
     $conn->commit();
+
+    // 4. Laporkan koneksi baru ini ke marketplace terpusat untuk keperluan statistik admin
+    try {
+        $orgSql = "SELECT name FROM organizations WHERE id = ? LIMIT 1";
+        $orgStmt = $conn->prepare($orgSql);
+        $orgStmt->bind_param("i", $org_id);
+        $orgStmt->execute();
+        $orgResult = $orgStmt->get_result()->fetch_assoc();
+        $orgStmt->close();
+        $kitchen_name = $orgResult['name'] ?? "Dapur IntiGizi #" . $org_id;
+
+        $ping_ch = curl_init("http://intigizi-supplier-api.test/app/register_connection.php");
+        $ping_data = json_encode([
+            'kitchen_name' => $kitchen_name,
+            'supplier_id' => $marketplace_id
+        ]);
+        curl_setopt($ping_ch, CURLOPT_POSTFIELDS, $ping_data);
+        curl_setopt($ping_ch, CURLOPT_HTTPHEADER, array('Content-Type:application/json'));
+        curl_setopt($ping_ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ping_ch, CURLOPT_TIMEOUT, 3);
+        curl_exec($ping_ch);
+        curl_close($ping_ch);
+    } catch (Throwable $ping_err) {
+        // Biarkan gagal tanpa merusak proses sinkronisasi utama
+    }
+
     http_response_code(200);
     echo json_encode(['message' => 'Sinkronisasi dengan Marketplace berhasil!', 'local_supplier_id' => $local_supplier_id]);
 
