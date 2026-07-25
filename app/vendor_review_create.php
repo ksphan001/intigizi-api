@@ -74,6 +74,47 @@ try {
     $updateStmt->close();
 
     $conn->commit();
+
+    // 4. Sinkronisasikan ulasan ke Marketplace terpusat jika supplier terhubung
+    try {
+        $supSql = "SELECT marketplace_id FROM suppliers WHERE id = ? LIMIT 1";
+        $supStmt = $conn->prepare($supSql);
+        $supStmt->bind_param("i", $vendor_id);
+        $supStmt->execute();
+        $supResult = $supStmt->get_result()->fetch_assoc();
+        $supStmt->close();
+
+        if ($supResult && !empty($supResult['marketplace_id'])) {
+            $marketplace_id = (int)$supResult['marketplace_id'];
+            
+            // Ambil nama dapur peninjau
+            $orgSql = "SELECT name FROM organizations WHERE id = ? LIMIT 1";
+            $orgStmt = $conn->prepare($orgSql);
+            $orgStmt->bind_param("i", $org_id);
+            $orgStmt->execute();
+            $orgResult = $orgStmt->get_result()->fetch_assoc();
+            $orgStmt->close();
+            $kitchen_name = $orgResult['name'] ?? "Dapur Gizi #" . $org_id;
+
+            // Kirim ulasan ke API terpusat Marketplace
+            $ch = curl_init("http://intigizi-supplier-api.test/app/submit_review.php");
+            $postData = json_encode([
+                'supplier_id' => $marketplace_id,
+                'kitchen_name' => $kitchen_name,
+                'rating' => $rating,
+                'comment' => $comment
+            ]);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $postData);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+            curl_exec($ch);
+            curl_close($ch);
+        }
+    } catch (Throwable $sync_err) {
+        // Biarkan gagal tanpa menggagalkan pengembalian respon sukses lokal
+    }
+
     http_response_code(201);
     echo json_encode(['message' => 'Terima kasih, ulasan Anda berhasil disimpan.']);
 
