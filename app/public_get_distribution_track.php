@@ -24,9 +24,10 @@ try {
     ];
 
     // 1. Ambil data dapur utama (titik awal)
-    $kitchen_sql = "SELECT name, latitude, longitude 
-                    FROM distribution_points 
-                    WHERE organization_id = ? AND is_main_kitchen = 1 
+    $kitchen_sql = "SELECT dp.name, dp.latitude, dp.longitude, o.director_name, o.pic_whatsapp, o.vendor_address 
+                    FROM distribution_points dp
+                    JOIN organizations o ON dp.organization_id = o.id
+                    WHERE dp.organization_id = ? AND dp.is_main_kitchen = 1 
                     LIMIT 1";
     $kitchen_stmt = $conn->prepare($kitchen_sql);
     $kitchen_stmt->bind_param("i", $org_id);
@@ -51,7 +52,8 @@ try {
                     dp.latitude,
                     dp.longitude,
                     dr.reported_by as courier_id,
-                    u.name as courier_name
+                    u.full_name as courier_name,
+                    u.phone_number as courier_phone
                  FROM distribution_reports dr
                  JOIN menus m ON dr.menu_id = m.id
                  JOIN distribution_points dp ON dr.distribution_point_id = dp.id
@@ -144,6 +146,7 @@ try {
             'photos' => $photos,
             'courier_id' => $dist['courier_id'] ? (int)$dist['courier_id'] : null,
             'courier_name' => $dist['courier_name'],
+            'courier_phone' => $dist['courier_phone'],
             'status' => $dist['status']
         ];
     }

@@ -22,7 +22,7 @@ $sql = "SELECT
             dr.id, dr.distribution_date, dr.distribution_point_id,
             dp.name as distribution_point_name, dr.menu_id, m.menu_name,
             dr.quantity_sent, dr.quantity_received, dr.status, dr.notes,
-            dr.reported_by, u.full_name as reporter_name, dr.created_at,
+            dr.reported_by, u.full_name as reporter_name, u.phone_number as reporter_phone, dr.created_at,
             dr.delivery_time, dr.total_beneficiaries,
             COALESCE(
                 (SELECT JSON_ARRAYAGG(
