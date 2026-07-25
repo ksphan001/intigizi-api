@@ -25,6 +25,44 @@ $delivery_time = isset($data['delivery_time']) && !empty($data['delivery_time'])
 $total_beneficiaries = isset($data['total_beneficiaries']) ? (int)$data['total_beneficiaries'] : null;
 
 
+// --- VALIDASI GEOFENCING GPS ---
+if (($status === 'Diterima' || $status === 'Sebagian Diterima') && isset($data['latitude']) && isset($data['longitude'])) {
+    $user_lat = (float)$data['latitude'];
+    $user_lng = (float)$data['longitude'];
+
+    if ($user_lat !== 0.0 && $user_lng !== 0.0) {
+        $point_sql = "SELECT dp.latitude, dp.longitude, dp.name 
+                      FROM distribution_reports dr
+                      JOIN distribution_points dp ON dr.distribution_point_id = dp.id
+                      WHERE dr.id = ? LIMIT 1";
+        $point_stmt = $conn->prepare($point_sql);
+        $point_stmt->bind_param("i", $id);
+        $point_stmt->execute();
+        $point = $point_stmt->get_result()->fetch_assoc();
+        $point_stmt->close();
+
+        if ($point && !empty($point['latitude']) && !empty($point['longitude'])) {
+            $dest_lat = (float)$point['latitude'];
+            $dest_lng = (float)$point['longitude'];
+
+            // Rumus Haversine
+            $earth_radius = 6371000; // meter
+            $dLat = deg2rad($dest_lat - $user_lat);
+            $dLng = deg2rad($dest_lng - $user_lng);
+            $a = sin($dLat/2) * sin($dLat/2) + cos(deg2rad($user_lat)) * cos(deg2rad($dest_lat)) * sin($dLng/2) * sin($dLng/2);
+            $c = 2 * atan2(sqrt($a), sqrt(1-$a));
+            $distance = $earth_radius * $c;
+
+            // Toleransi 150 meter
+            if ($distance > 150.0) {
+                http_response_code(400);
+                echo json_encode(['message' => "Anda terlalu jauh (" . round($distance) . "m) dari titik '{$point['name']}' untuk mengonfirmasi penerimaan!"]);
+                exit();
+            }
+        }
+    }
+}
+
 $conn->begin_transaction();
 try {
     // 1. Update data utama laporan distribusi
@@ -48,10 +86,20 @@ try {
             if ($_FILES['photos']['error'][$key] === UPLOAD_ERR_OK) {
                 $original_name = basename($_FILES['photos']['name'][$key]);
                 $file_ext = strtolower(pathinfo($original_name, PATHINFO_EXTENSION));
-                $safe_name = preg_replace('/[^A-Za-z0-9_.-]/', '_', pathinfo($original_name, PATHINFO_FILENAME));
                 
-                // Membuat nama file yang unik
-                $new_filename = "dist_photo_{$id}_" . time() . "_{$key}.{$file_ext}";
+                // BATASAN EKSTENSI KEAMANAN
+                $allowed_exts = ['jpg', 'jpeg', 'png', 'webp'];
+                if (!in_array($file_ext, $allowed_exts)) {
+                    throw new Exception("Ekstensi file '{$file_ext}' tidak diizinkan. Hanya menerima JPG, JPEG, PNG, WEBP.");
+                }
+
+                // BATASAN UKURAN 5MB
+                if ($_FILES['photos']['size'][$key] > 5 * 1024 * 1024) {
+                    throw new Exception("Ukuran berkas '{$original_name}' melebihi batas maksimal 5MB.");
+                }
+
+                // Membuat nama file yang unik secara acak
+                $new_filename = "dist_photo_{$id}_" . time() . "_{$key}." . $file_ext;
                 $target_file = $upload_dir . $new_filename;
 
                 if (move_uploaded_file($tmp_name, $target_file)) {
@@ -70,8 +118,8 @@ try {
 
 } catch (Exception $e) {
     $conn->rollback();
-    http_response_code(500);
-    echo json_encode(['message' => 'Gagal memperbarui laporan: ' . $e->getMessage()]);
+    http_response_code(400); // Bad Request untuk error validasi upload file
+    echo json_encode(['message' => $e->getMessage()]);
 }
 
 $conn->close();

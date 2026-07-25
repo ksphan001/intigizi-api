@@ -111,9 +111,17 @@ try {
                 throw new Exception("File bukti pembayaran tidak ditemukan.", 400);
             }
             
+            $file_ext = strtolower(pathinfo($_FILES["payment_proof"]["name"], PATHINFO_EXTENSION));
+            $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+            if (!in_array($file_ext, $allowed_exts)) {
+                throw new Exception("Ekstensi file '{$file_ext}' tidak diizinkan. Hanya menerima JPG, JPEG, PNG, WEBP, PDF.", 400);
+            }
+            if ($_FILES["payment_proof"]["size"] > 5 * 1024 * 1024) {
+                throw new Exception("Ukuran berkas melebihi batas maksimal 5MB.", 400);
+            }
+            
             $target_dir = __DIR__ . "/../uploads/payment_proofs/";
             if (!is_dir($target_dir)) mkdir($target_dir, 0755, true);
-            $file_ext = strtolower(pathinfo($_FILES["payment_proof"]["name"], PATHINFO_EXTENSION));
             $new_filename = "payment_{$po_id}_" . time() . "." . $file_ext;
             
             if (move_uploaded_file($_FILES["payment_proof"]["tmp_name"], $target_dir . $new_filename)) {
