@@ -54,10 +54,40 @@ try {
         
         // Hitung total_amount
         $total_amount = 0;
+        $processedGroupItems = [];
         foreach ($group_items as $item) {
             $qty = (float)$item->deficit_qty;
             $price = (float)$item->suggested_price;
-            $total_amount += $qty * $price;
+            $ing_id = (int)$item->ingredient_id;
+
+            $priceSql = "SELECT base_price, tier_qty, tier_price FROM supplier_ingredients WHERE supplier_id = ? AND ingredient_id = ? LIMIT 1";
+            $priceStmt = $conn->prepare($priceSql);
+            $priceStmt->bind_param("ii", $sup_id, $ing_id);
+            $priceStmt->execute();
+            $priceRes = $priceStmt->get_result()->fetch_assoc();
+            $priceStmt->close();
+
+            if ($priceRes) {
+                $base_price = (float)$priceRes['base_price'];
+                $tier_qty = (float)$priceRes['tier_qty'];
+                $tier_price = (float)$priceRes['tier_price'];
+
+                if ($tier_qty > 0 && $qty >= $tier_qty && $tier_price > 0) {
+                    $price = $tier_price;
+                } else {
+                    $price = $base_price;
+                }
+            }
+
+            $subtotal = $qty * $price;
+            $total_amount += $subtotal;
+
+            $processedGroupItems[] = [
+                'ingredient_id' => $ing_id,
+                'qty' => $qty,
+                'price' => $price,
+                'subtotal' => $subtotal
+            ];
         }
 
         // Simpan PO Utama
@@ -75,13 +105,8 @@ try {
         $itemSql = "INSERT INTO po_items (organization_id, po_id, ingredient_id, quantity, price_per_unit, subtotal) VALUES (?, ?, ?, ?, ?, ?)";
         $itemStmt = $conn->prepare($itemSql);
 
-        foreach ($group_items as $item) {
-            $ing_id = (int)$item->ingredient_id;
-            $qty = (float)$item->deficit_qty;
-            $price = (float)$item->suggested_price;
-            $subtotal = $qty * $price;
-
-            $itemStmt->bind_param("iiiddd", $org_id, $po_id, $ing_id, $qty, $price, $subtotal);
+        foreach ($processedGroupItems as $item) {
+            $itemStmt->bind_param("iiiddd", $org_id, $po_id, $item['ingredient_id'], $item['qty'], $item['price'], $item['subtotal']);
             if (!$itemStmt->execute()) {
                 throw new Exception("Gagal menyimpan item PO: " . $itemStmt->error);
             }

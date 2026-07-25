@@ -28,12 +28,48 @@ $supplier_id = (int)$data['supplier_id'];
 $conn->begin_transaction();
 
 try {
+    // Cari harga dan apply harga grosir jika memenuhi syarat
+    $processedItems = [];
     $total_amount = 0;
+    
     foreach ($data['items'] as $item) {
-        if (!isset($item['quantity']) || !isset($item['price'])) {
-            throw new Exception('Setiap item harus memiliki quantity dan price.');
+        if (!isset($item['quantity'])) {
+            throw new Exception('Setiap item harus memiliki quantity.');
         }
-        $total_amount += (float)$item['quantity'] * (float)$item['price'];
+        
+        $ing_id = (int)$item['ingredient_id'];
+        $quantity = (float)$item['quantity'];
+        
+        // Cek database untuk harga & tier grosir
+        $priceSql = "SELECT base_price, tier_qty, tier_price FROM supplier_ingredients WHERE supplier_id = ? AND ingredient_id = ? LIMIT 1";
+        $priceStmt = $conn->prepare($priceSql);
+        $priceStmt->bind_param("ii", $supplier_id, $ing_id);
+        $priceStmt->execute();
+        $priceRes = $priceStmt->get_result()->fetch_assoc();
+        $priceStmt->close();
+        
+        $price = isset($item['price']) ? (float)$item['price'] : 0.00;
+        if ($priceRes) {
+            $base_price = (float)$priceRes['base_price'];
+            $tier_qty = (float)$priceRes['tier_qty'];
+            $tier_price = (float)$priceRes['tier_price'];
+            
+            if ($tier_qty > 0 && $quantity >= $tier_qty && $tier_price > 0) {
+                $price = $tier_price;
+            } else {
+                $price = $base_price;
+            }
+        }
+        
+        $subtotal = $quantity * $price;
+        $total_amount += $subtotal;
+        
+        $processedItems[] = [
+            'ingredient_id' => $ing_id,
+            'quantity' => $quantity,
+            'price' => $price,
+            'subtotal' => $subtotal
+        ];
     }
 
     $po_code = "PO-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id), 0, 6));
@@ -47,11 +83,8 @@ try {
 
     $itemSql = "INSERT INTO po_items (organization_id, po_id, ingredient_id, quantity, price_per_unit, subtotal) VALUES (?, ?, ?, ?, ?, ?)";
     $itemStmt = $conn->prepare($itemSql);
-    foreach ($data['items'] as $item) {
-        $quantity = (float)$item['quantity'];
-        $price = (float)$item['price'];
-        $subtotal = $quantity * $price;
-        $itemStmt->bind_param("iiiddd", $org_id, $po_id, $item['ingredient_id'], $quantity, $price, $subtotal);
+    foreach ($processedItems as $item) {
+        $itemStmt->bind_param("iiiddd", $org_id, $po_id, $item['ingredient_id'], $item['quantity'], $item['price'], $item['subtotal']);
         $itemStmt->execute();
     }
     $itemStmt->close();

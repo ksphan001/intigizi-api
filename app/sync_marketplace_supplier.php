@@ -135,9 +135,12 @@ try {
         }
 
         // 3b. Masukkan katalog ke supplier_ingredients
-        $insCatSql = "INSERT INTO supplier_ingredients (supplier_id, ingredient_id, base_price, daily_capacity, unit_symbol) VALUES (?, ?, ?, ?, ?)";
+        $tier_qty = isset($item['tier_qty']) ? (float)$item['tier_qty'] : 0.00;
+        $tier_price = isset($item['tier_price']) ? (float)$item['tier_price'] : 0.00;
+
+        $insCatSql = "INSERT INTO supplier_ingredients (supplier_id, ingredient_id, base_price, daily_capacity, unit_symbol, tier_qty, tier_price) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $insCatStmt = $conn->prepare($insCatSql);
-        $insCatStmt->bind_param("iidds", $local_supplier_id, $local_ingredient_id, $itemPrice, $itemCapacity, $item['unit_symbol']);
+        $insCatStmt->bind_param("iiddsdd", $local_supplier_id, $local_ingredient_id, $itemPrice, $itemCapacity, $item['unit_symbol'], $tier_qty, $tier_price);
         $insCatStmt->execute();
         $insCatStmt->close();
     }
