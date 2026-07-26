@@ -16,14 +16,14 @@ $org_id = (int)$userData['org_id'];
 $data = json_decode(file_get_contents("php://input"), true);
 
 // --- PERBAIKAN 2: Mengubah semua akses dari objek `->` menjadi array `['...']` ---
-if (!isset($data['proposal_id']) || !isset($data['supplier_id']) || !isset($data['items']) || !is_array($data['items']) || empty($data['items'])) {
+if (!isset($data['proposal_id']) || !isset($data['items']) || !is_array($data['items']) || empty($data['items'])) {
     http_response_code(400);
-    echo json_encode(['message' => 'Data proposal, supplier, dan item wajib diisi.']);
+    echo json_encode(['message' => 'Data proposal dan item wajib diisi.']);
     exit();
 }
 
 $proposal_id = (int)$data['proposal_id'];
-$supplier_id = (int)$data['supplier_id'];
+$supplier_id = !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null;
 
 $conn->begin_transaction();
 
@@ -72,10 +72,15 @@ try {
         ];
     }
 
-    $po_code = "PO-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id), 0, 6));
-    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, status) VALUES (?, ?, ?, ?, ?, 'Dikirim')";
+    $po_code = $supplier_id === null 
+        ? "PO-CASH-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id . rand(10, 99)), 0, 5))
+        : "PO-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id), 0, 6));
+    
+    $status = $supplier_id === null ? 'Selesai' : 'Dikirim';
+
+    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, status) VALUES (?, ?, ?, ?, ?, ?)";
     $poStmt = $conn->prepare($poSql);
-    $poStmt->bind_param("isiid", $org_id, $po_code, $proposal_id, $supplier_id, $total_amount);
+    $poStmt->bind_param("isiids", $org_id, $po_code, $proposal_id, $supplier_id, $total_amount, $status);
     $poStmt->execute();
     $po_id = $conn->insert_id;
     if ($po_id == 0) throw new Exception('Gagal membuat record PO utama.');
@@ -89,48 +94,50 @@ try {
     }
     $itemStmt->close();
     
-    // Logika notifikasi
-    $vendor_user_id = null;
-    $vendor_org_id = null;
-    
-    $vendorCheckSql = "SELECT u.id, u.organization_id FROM users u JOIN organizations o ON u.organization_id = o.id WHERE o.id = ? AND o.registration_type = 'Vendor' AND u.role_id = 5 LIMIT 1";
-    $vendorStmt = $conn->prepare($vendorCheckSql);
-    $vendorStmt->bind_param("i", $supplier_id);
-    $vendorStmt->execute();
-    if ($vendorRow = $vendorStmt->get_result()->fetch_assoc()) {
-        $vendor_user_id = $vendorRow['id'];
-        $vendor_org_id = $vendorRow['organization_id'];
-    }
-    $vendorStmt->close();
-
-    if (!$vendor_user_id) {
-        $supplierCheckSql = "SELECT user_id, organization_id FROM suppliers WHERE id = ?";
-        $supplierStmt = $conn->prepare($supplierCheckSql);
-        $supplierStmt->bind_param("i", $supplier_id);
-        $supplierStmt->execute();
-        if ($supplierRow = $supplierStmt->get_result()->fetch_assoc()) {
-            $vendor_user_id = $supplierRow['user_id'];
-            $vendor_org_id = $supplierRow['organization_id'];
+    // Logika notifikasi & sinkronisasi B2B (Hanya jika memiliki supplier)
+    if ($supplier_id !== null) {
+        $vendor_user_id = null;
+        $vendor_org_id = null;
+        
+        $vendorCheckSql = "SELECT u.id, u.organization_id FROM users u JOIN organizations o ON u.organization_id = o.id WHERE o.id = ? AND o.registration_type = 'Vendor' AND u.role_id = 5 LIMIT 1";
+        $vendorStmt = $conn->prepare($vendorCheckSql);
+        $vendorStmt->bind_param("i", $supplier_id);
+        $vendorStmt->execute();
+        if ($vendorRow = $vendorStmt->get_result()->fetch_assoc()) {
+            $vendor_user_id = $vendorRow['id'];
+            $vendor_org_id = $vendorRow['organization_id'];
         }
-        $supplierStmt->close();
+        $vendorStmt->close();
+
+        if (!$vendor_user_id) {
+            $supplierCheckSql = "SELECT user_id, organization_id FROM suppliers WHERE id = ?";
+            $supplierStmt = $conn->prepare($supplierCheckSql);
+            $supplierStmt->bind_param("i", $supplier_id);
+            $supplierStmt->execute();
+            if ($supplierRow = $supplierStmt->get_result()->fetch_assoc()) {
+                $vendor_user_id = $supplierRow['user_id'];
+                $vendor_org_id = $supplierRow['organization_id'];
+            }
+            $supplierStmt->close();
+        }
+        
+        if ($vendor_user_id && $vendor_org_id) {
+            send_notification($conn, $vendor_org_id, $vendor_user_id, "Pesanan Baru untuk Anda: {$po_code}", "Anda menerima pesanan baru yang perlu ditinjau.", "/app/vendor/orders");
+        }
+
+        // --- SINKRONISASI B2B MARKETPLACE ---
+        try {
+            require_once __DIR__ . '/marketplace_po_helper.php';
+            sync_po_to_marketplace($conn, $po_id, $org_id, $supplier_id);
+        } catch (Throwable $sync_err) {
+            // Biarkan gagal tanpa menggagalkan pengembalian sukses utama
+        }
     }
     
-    if ($vendor_user_id && $vendor_org_id) {
-        send_notification($conn, $vendor_org_id, $vendor_user_id, "Pesanan Baru untuk Anda: {$po_code}", "Anda menerima pesanan baru yang perlu ditinjau.", "/app/vendor/orders");
-    }
-
     $conn->commit();
 
-    // --- SINKRONISASI B2B MARKETPLACE ---
-    try {
-        require_once __DIR__ . '/marketplace_po_helper.php';
-        sync_po_to_marketplace($conn, $po_id, $org_id, $supplier_id);
-    } catch (Throwable $sync_err) {
-        // Biarkan gagal tanpa menggagalkan pengembalian sukses utama
-    }
-
     http_response_code(201);
-    echo json_encode(['message' => 'Purchase Order berhasil dibuat dan notifikasi terkirim.', 'po_code' => $po_code]);
+    echo json_encode(['message' => 'Purchase Order berhasil dibuat.', 'po_code' => $po_code]);
 
 } catch (Throwable $e) {
     $conn->rollback();

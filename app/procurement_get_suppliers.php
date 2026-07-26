@@ -17,7 +17,8 @@ try {
     $sql = "(SELECT
                 o.id,
                 o.name,
-                'Vendor' AS type
+                'Vendor' AS type,
+                o.id AS marketplace_id
             FROM
                 organizations o
             WHERE
@@ -26,7 +27,8 @@ try {
             (SELECT
                 s.id,
                 s.supplier_name AS name,
-                'Supplier' AS type
+                'Supplier' AS type,
+                s.marketplace_id AS marketplace_id
             FROM
                 suppliers s
             WHERE
