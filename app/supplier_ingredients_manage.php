@@ -66,6 +66,38 @@ try {
         http_response_code(200);
         echo json_encode($items);
         
+    } elseif ($action === 'add_single') {
+        if (!isset($data->ingredient_id) || !isset($data->base_price)) {
+            throw new Exception("Bahan baku dan harga wajib diisi.");
+        }
+        $ingredient_id = (int)$data->ingredient_id;
+        $base_price = (float)$data->base_price;
+        $daily_capacity = isset($data->daily_capacity) ? (float)$data->daily_capacity : 9999.00;
+        
+        $checkSql = "SELECT id FROM supplier_ingredients WHERE supplier_id = ? AND ingredient_id = ? LIMIT 1";
+        $checkStmt = $conn->prepare($checkSql);
+        $checkStmt->bind_param("ii", $supplier_id, $ingredient_id);
+        $checkStmt->execute();
+        $exists = $checkStmt->get_result()->fetch_assoc();
+        $checkStmt->close();
+        
+        if ($exists) {
+            $updateSql = "UPDATE supplier_ingredients SET base_price = ? WHERE supplier_id = ? AND ingredient_id = ?";
+            $upStmt = $conn->prepare($updateSql);
+            $upStmt->bind_param("dii", $base_price, $supplier_id, $ingredient_id);
+            $upStmt->execute();
+            $upStmt->close();
+        } else {
+            $insertSql = "INSERT INTO supplier_ingredients (supplier_id, ingredient_id, base_price, daily_capacity) VALUES (?, ?, ?, ?)";
+            $insStmt = $conn->prepare($insertSql);
+            $insStmt->bind_param("iidd", $supplier_id, $ingredient_id, $base_price, $daily_capacity);
+            $insStmt->execute();
+            $insStmt->close();
+        }
+        
+        http_response_code(200);
+        echo json_encode(['message' => 'Berhasil menghubungkan bahan baku ke supplier.']);
+        
     } elseif ($action === 'save') {
         if (!isset($data->items) || !is_array($data->items)) {
             throw new Exception("Daftar items bahan baku wajib dilampirkan.");
