@@ -48,10 +48,12 @@ try {
         // Logika untuk mengambil daftar semua PO
         $sql = "SELECT 
                     po.id, po.po_code, po.total_amount, po.tax_ppn, po.tax_pph, po.net_amount, po.status, po.vendor_status, po.delivery_status, po.created_at,
-                    COALESCE(s.supplier_name, o.name) as supplier_name
+                    COALESCE(s.supplier_name, o.name) as supplier_name,
+                    prop.proposal_code
                 FROM purchase_orders po
                 LEFT JOIN suppliers s ON po.supplier_id = s.id
                 LEFT JOIN organizations o ON po.supplier_id = o.id
+                LEFT JOIN proposals prop ON po.proposal_id = prop.id
                 WHERE po.organization_id = ? 
                 ORDER BY po.created_at DESC";
         $stmt = $conn->prepare($sql);
