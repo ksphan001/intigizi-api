@@ -1,73 +1,110 @@
 <?php
 // File: app/purchase_orders_create_manual.php
-// PENJELASAN: Ditambahkan logika untuk mengirim notifikasi ke Vendor/Supplier saat PO Manual dibuat.
-// PERBAIKAN: Mengatasi error "Cannot use object of type stdClass as array" dengan
-// mengubah cara data JSON di-decode dan diakses.
+// PENJELASAN: API untuk membuat PO Manual dengan fitur Auto-Split PO berdasarkan supplier per item.
 
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth_middleware.php';
 require_once __DIR__ . '/notification_engine.php';
+
 $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
-// --- PERBAIKAN 1: Menggunakan `json_decode` dengan argumen `true` ---
-// Ini mengubah JSON menjadi array asosiatif, bukan objek stdClass, untuk memastikan konsistensi.
 $data = json_decode(file_get_contents("php://input"), true);
 
-// --- PERBAIKAN 2: Mengubah akses dari objek `->` menjadi array `['...']` ---
-if (!isset($data['supplier_id']) || empty($data['supplier_id']) || !isset($data['items']) || !is_array($data['items']) || empty($data['items'])) {
+if (!isset($data['items']) || !is_array($data['items']) || empty($data['items'])) {
     http_response_code(400);
-    echo json_encode(['message' => 'ID Supplier wajib dipilih untuk pencatatan PO yang akuntabel.']);
+    echo json_encode(['message' => 'Daftar item belanja (items) wajib disertakan.']);
     exit();
 }
 
-$supplier_id = (int)$data['supplier_id'];
 $items = $data['items'];
-$total_amount = 0;
+$apply_ppn = isset($data['apply_ppn']) ? (bool)$data['apply_ppn'] : false;
+$apply_pph = isset($data['apply_pph']) ? (bool)$data['apply_pph'] : false;
 
 $conn->begin_transaction();
 
 try {
-    foreach ($items as $item) {
-        if (!isset($item['quantity']) || !isset($item['price_per_unit'])) {
-             throw new Exception('Setiap item harus memiliki quantity dan price_per_unit.');
+    // 1. Kelompokkan item berdasarkan supplier_id
+    $supplier_groups = [];
+    foreach ($items as $index => $item) {
+        if (empty($item['supplier_id'])) {
+            throw new Exception("Item ke-" . ($index + 1) . " belum memilih supplier.");
         }
-        $total_amount += (float)$item['quantity'] * (float)$item['price_per_unit'];
+        if (empty($item['ingredient_id'])) {
+            throw new Exception("Item ke-" . ($index + 1) . " belum memilih bahan baku.");
+        }
+        if (!isset($item['quantity']) || (float)$item['quantity'] <= 0) {
+            throw new Exception("Item ke-" . ($index + 1) . " harus memiliki jumlah lebih dari 0.");
+        }
+        if (!isset($item['price_per_unit']) || (float)$item['price_per_unit'] < 0) {
+            throw new Exception("Item ke-" . ($index + 1) . " harus memiliki harga satuan yang valid.");
+        }
+
+        $sup_id = (int)$item['supplier_id'];
+        if (!isset($supplier_groups[$sup_id])) {
+            $supplier_groups[$sup_id] = [];
+        }
+        $supplier_groups[$sup_id][] = $item;
     }
 
-    $tax_ppn = isset($data['tax_ppn']) ? (float)$data['tax_ppn'] : 0.00;
-    $tax_pph = isset($data['tax_pph']) ? (float)$data['tax_pph'] : 0.00;
-    $net_amount = isset($data['net_amount']) ? (float)$data['net_amount'] : ($total_amount + $tax_ppn - $tax_pph);
+    $created_pos = [];
 
-    $po_code = "PO-MANUAL-" . date("Ymd") . "-" . strtoupper(substr(md5(time()), 0, 5));
-    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, tax_ppn, tax_pph, net_amount, status) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'Selesai')"; // Belanja manual langsung selesai
-    $poStmt = $conn->prepare($poSql);
-    $poStmt->bind_param("isidddd", $org_id, $po_code, $supplier_id, $total_amount, $tax_ppn, $tax_pph, $net_amount);
-    $poStmt->execute();
-    $po_id = $conn->insert_id;
-    if ($po_id == 0) {
-        throw new Exception('Gagal membuat record Purchase Order utama.');
-    }
-    $poStmt->close();
+    // 2. Buat PO terpisah untuk setiap supplier group (Auto-Split PO)
+    foreach ($supplier_groups as $sup_id => $group_items) {
+        $total_amount = 0;
+        $processedGroupItems = [];
 
-    $itemSql = "INSERT INTO po_items (organization_id, po_id, ingredient_id, quantity, price_per_unit, subtotal) VALUES (?, ?, ?, ?, ?, ?)";
-    $itemStmt = $conn->prepare($itemSql);
-    foreach ($items as $item) {
-        $subtotal = (float)$item['quantity'] * (float)$item['price_per_unit'];
-        if (!isset($item['ingredient_id'])) throw new Exception('Setiap item harus memiliki ingredient_id.');
-        $itemStmt->bind_param("iiiddd", $org_id, $po_id, $item['ingredient_id'], $item['quantity'], $item['price_per_unit'], $subtotal);
-        $itemStmt->execute();
-    }
-    $itemStmt->close();
+        foreach ($group_items as $item) {
+            $qty = (float)$item['quantity'];
+            $price = (float)$item['price_per_unit'];
+            $ing_id = (int)$item['ingredient_id'];
+            $subtotal = $qty * $price;
 
-    // Logika notifikasi (hanya jika ada supplier)
-    if ($supplier_id !== null && $supplier_id > 0) {
+            $total_amount += $subtotal;
+            $processedGroupItems[] = [
+                'ingredient_id' => $ing_id,
+                'qty' => $qty,
+                'price' => $price,
+                'subtotal' => $subtotal
+            ];
+        }
+
+        // Hitung pajak secara proporsional per PO
+        $tax_ppn = $apply_ppn ? Math.round($total_amount * 0.11) : 0.00;
+        $tax_pph = $apply_pph ? Math.round($total_amount * 0.015) : 0.00;
+        $net_amount = $total_amount + $tax_ppn - $tax_pph;
+
+        $po_code = "PO-MANUAL-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $sup_id . rand(100, 999)), 0, 5));
+
+        // Belanja manual langsung selesai
+        $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, tax_ppn, tax_pph, net_amount, status) VALUES (?, ?, NULL, ?, ?, ?, ?, ?, 'Selesai')";
+        $poStmt = $conn->prepare($poSql);
+        $poStmt->bind_param("isidddd", $org_id, $po_code, $sup_id, $total_amount, $tax_ppn, $tax_pph, $net_amount);
+        
+        if (!$poStmt->execute()) {
+            throw new Exception("Gagal membuat data PO utama: " . $poStmt->error);
+        }
+        $po_id = $poStmt->insert_id;
+        $poStmt->close();
+
+        // Simpan PO Items
+        $itemSql = "INSERT INTO po_items (organization_id, po_id, ingredient_id, quantity, price_per_unit, subtotal) VALUES (?, ?, ?, ?, ?, ?)";
+        $itemStmt = $conn->prepare($itemSql);
+        foreach ($processedGroupItems as $item) {
+            $itemStmt->bind_param("iiiddd", $org_id, $po_id, $item['ingredient_id'], $item['qty'], $item['price'], $item['subtotal']);
+            if (!$itemStmt->execute()) {
+                throw new Exception("Gagal menyimpan item PO: " . $itemStmt->error);
+            }
+        }
+        $itemStmt->close();
+
+        // Kirim notifikasi ke supplier terkait
         $vendor_user_id = null;
         $vendor_org_id = null;
 
         $vendorCheckSql = "SELECT u.id, u.organization_id FROM users u JOIN organizations o ON u.organization_id = o.id WHERE o.id = ? AND o.registration_type = 'Vendor' AND u.role_id = 5 LIMIT 1";
         $vendorStmt = $conn->prepare($vendorCheckSql);
-        $vendorStmt->bind_param("i", $supplier_id);
+        $vendorStmt->bind_param("i", $sup_id);
         $vendorStmt->execute();
         if ($vendorRow = $vendorStmt->get_result()->fetch_assoc()) {
             $vendor_user_id = $vendorRow['id'];
@@ -78,7 +115,7 @@ try {
         if (!$vendor_user_id) {
             $supplierCheckSql = "SELECT user_id, organization_id FROM suppliers WHERE id = ?";
             $supplierStmt = $conn->prepare($supplierCheckSql);
-            $supplierStmt->bind_param("i", $supplier_id);
+            $supplierStmt->bind_param("i", $sup_id);
             $supplierStmt->execute();
             if ($supplierRow = $supplierStmt->get_result()->fetch_assoc()) {
                 $vendor_user_id = $supplierRow['user_id'];
@@ -88,21 +125,51 @@ try {
         }
         
         if ($vendor_user_id && $vendor_org_id) {
-            send_notification($conn, $vendor_org_id, $vendor_user_id, "Pesanan Baru untuk Anda: {$po_code}", "Anda menerima pesanan baru yang perlu ditinjau.", "/app/vendor/orders");
+            send_notification($conn, $vendor_org_id, $vendor_user_id, "Pesanan Baru (Manual): {$po_code}", "Anda menerima pesanan baru yang dicatat langsung oleh dapur.", "/app/vendor/orders");
         }
+
+        $created_pos[] = [
+            'po_id' => $po_id,
+            'po_code' => $po_code,
+            'supplier_name' => isset($group_items[0]['suggested_supplier_name']) ? $group_items[0]['suggested_supplier_name'] : 'Supplier',
+            'total_amount' => $total_amount
+        ];
     }
-    
+
+    // --- SINKRONISASI B2B MARKETPLACE ---
+    try {
+        require_once __DIR__ . '/marketplace_po_helper.php';
+        foreach ($created_pos as $po) {
+            $supSql = "SELECT supplier_id FROM purchase_orders WHERE id = ? LIMIT 1";
+            $supStmt = $conn->prepare($supSql);
+            $supStmt->bind_param("i", $po['po_id']);
+            $supStmt->execute();
+            $po_detail = $supStmt->get_result()->fetch_assoc();
+            $supStmt->close();
+
+            if ($po_detail) {
+                sync_po_to_marketplace($conn, $po['po_id'], $org_id, (int)$po_detail['supplier_id']);
+            }
+        }
+    } catch (Throwable $sync_err) {
+        // Biarkan gagal tanpa menggagalkan pengembalian sukses utama
+    }
+
     $conn->commit();
+    
+    // Bentuk pesan sukses informatif
+    $po_codes_str = implode(', ', array_column($created_pos, 'po_code'));
     http_response_code(201);
-    echo json_encode(['message' => 'Purchase Order manual berhasil dibuat dan notifikasi terkirim.', 'po_code' => $po_code]);
+    echo json_encode([
+        'message' => 'PO manual berhasil dibuat dan di-split otomatis berdasarkan supplier: ' . $po_codes_str,
+        'created_pos' => $created_pos
+    ]);
 
 } catch (Throwable $e) {
     $conn->rollback();
-    http_response_code(500);
-    // Mengembalikan pesan error asli dari PHP untuk debugging
-    echo json_encode(['message' => 'Terjadi error internal saat membuat PO.', 'error' => $e->getMessage()]);
+    http_response_code(400);
+    echo json_encode(['message' => $e->getMessage()]);
 } finally {
     if (isset($conn)) $conn->close();
 }
 ?>
-
