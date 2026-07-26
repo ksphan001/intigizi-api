@@ -25,11 +25,11 @@ try {
             $supStmt->close();
         }
 
-        // --- PERBAIKAN: Menambahkan LEFT JOIN ke vendor_reviews ---
         $sql = "SELECT 
                     po.*, 
                     prop.proposal_code, 
                     COALESCE(s.supplier_name, o.name) as supplier_name,
+                    s.marketplace_id,
                     CASE WHEN vr.id IS NOT NULL THEN 1 ELSE 0 END as has_been_reviewed
                 FROM purchase_orders po
                 LEFT JOIN proposals prop ON po.proposal_id = prop.id
