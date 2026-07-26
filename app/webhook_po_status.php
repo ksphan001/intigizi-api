@@ -36,15 +36,15 @@ try {
 
     $conn->begin_transaction();
 
-    // 2. Petakan status dari marketplace ke database dapur
+    // 2. Petakan status dari marketplace ke database dapur dan update delivery_status
     if ($status === 'processing') {
-        $upSql = "UPDATE purchase_orders SET vendor_status = 'Disetujui Dapur' WHERE id = ?";
+        $upSql = "UPDATE purchase_orders SET vendor_status = 'Disetujui Dapur', delivery_status = 'processing' WHERE id = ?";
         $upStmt = $conn->prepare($upSql);
         $upStmt->bind_param("i", $po_id);
         $upStmt->execute();
         $upStmt->close();
     } elseif ($status === 'shipped') {
-        $upSql = "UPDATE purchase_orders SET vendor_status = 'Invoice Terkirim' WHERE id = ?";
+        $upSql = "UPDATE purchase_orders SET vendor_status = 'Invoice Terkirim', delivery_status = 'shipped' WHERE id = ?";
         $upStmt = $conn->prepare($upSql);
         $upStmt->bind_param("i", $po_id);
         $upStmt->execute();
@@ -52,7 +52,7 @@ try {
     } elseif ($status === 'delivered') {
         // Jika status "delivered", update status PO menjadi Selesai dan perbarui stok gizi dapur otomatis
         // a. Update PO status
-        $upSql = "UPDATE purchase_orders SET status = 'Selesai' WHERE id = ?";
+        $upSql = "UPDATE purchase_orders SET status = 'Selesai', delivery_status = 'delivered' WHERE id = ?";
         $upStmt = $conn->prepare($upSql);
         $upStmt->bind_param("i", $po_id);
         $upStmt->execute();

@@ -74,7 +74,7 @@ try {
 
     $po_code = $supplier_id === null 
         ? "PO-CASH-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id . rand(10, 99)), 0, 5))
-        : "PO-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id), 0, 6));
+        : "PO-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id . $supplier_id . rand(10, 99)), 0, 6));
     
     $status = $supplier_id === null ? 'Selesai' : 'Dikirim';
     $vendor_status = $supplier_id === null ? 'Disetujui Dapur' : 'Menunggu Konfirmasi';

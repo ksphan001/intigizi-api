@@ -47,7 +47,7 @@ try {
     } else {
         // Logika untuk mengambil daftar semua PO
         $sql = "SELECT 
-                    po.id, po.po_code, po.total_amount, po.tax_ppn, po.tax_pph, po.net_amount, po.status, po.vendor_status, po.created_at,
+                    po.id, po.po_code, po.total_amount, po.tax_ppn, po.tax_pph, po.net_amount, po.status, po.vendor_status, po.delivery_status, po.created_at,
                     COALESCE(s.supplier_name, o.name) as supplier_name
                 FROM purchase_orders po
                 LEFT JOIN suppliers s ON po.supplier_id = s.id
