@@ -31,10 +31,15 @@ $conn->begin_transaction();
 try {
     // 1. Kelompokkan item berdasarkan supplier_id
     $supplier_groups = [];
+    $skipped_items = [];
+    
     foreach ($items as $item) {
         $supplier_id = isset($item->suggested_supplier_id) ? (int)$item->suggested_supplier_id : 0;
-        // Hanya proses item yang memiliki supplier
-        if ($supplier_id <= 0) continue;
+        // Hanya proses item yang memiliki supplier valid
+        if ($supplier_id <= 0) {
+            $skipped_items[] = $item->ingredient_name;
+            continue;
+        }
 
         if (!isset($supplier_groups[$supplier_id])) {
             $supplier_groups[$supplier_id] = [];
@@ -43,7 +48,7 @@ try {
     }
 
     if (count($supplier_groups) === 0) {
-        throw new Exception("Tidak ada bahan baku dengan supplier valid untuk diproses PO-nya.");
+        throw new Exception("Semua bahan baku defisit tidak memiliki supplier yang terhubung. Silakan hubungkan supplier terlebih dahulu melalui menu Data Master > Supplier.", 400);
     }
 
     $created_pos = [];
@@ -127,7 +132,6 @@ try {
     try {
         require_once __DIR__ . '/marketplace_po_helper.php';
         foreach ($created_pos as $po) {
-            // Kita butuh mencari supplier_id lokal asli dari purchase_orders untuk pencarian marketplace_id
             $supSql = "SELECT supplier_id FROM purchase_orders WHERE id = ? LIMIT 1";
             $supStmt = $conn->prepare($supSql);
             $supStmt->bind_param("i", $po['po_id']);
@@ -143,9 +147,14 @@ try {
         // Biarkan gagal tanpa menggagalkan pengembalian sukses utama
     }
 
+    $message = 'PO otomatis berhasil dibuat secara terpisah.';
+    if (count($skipped_items) > 0) {
+        $message .= ' Namun, bahan berikut dilewati karena belum memiliki supplier terhubung: ' . implode(', ', $skipped_items) . '.';
+    }
+
     http_response_code(201);
     echo json_encode([
-        'message' => 'PO otomatis berhasil dibuat secara terpisah.',
+        'message' => $message,
         'created_pos' => $created_pos
     ]);
 
