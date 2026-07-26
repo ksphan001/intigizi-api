@@ -55,7 +55,7 @@ try {
             : "PO-AUTO-" . time() . "-" . rand(100, 999);
             
         $status = $supplier_id_db === null ? 'Selesai' : 'Dikirim';
-        $vendor_status = $supplier_id_db === null ? null : 'Menunggu Konfirmasi';
+        $vendor_status = $supplier_id_db === null ? 'Disetujui Dapur' : 'Menunggu Konfirmasi';
         
         // Hitung total_amount
         $total_amount = 0;

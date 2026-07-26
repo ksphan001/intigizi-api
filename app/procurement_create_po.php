@@ -77,10 +77,11 @@ try {
         : "PO-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id), 0, 6));
     
     $status = $supplier_id === null ? 'Selesai' : 'Dikirim';
+    $vendor_status = $supplier_id === null ? 'Disetujui Dapur' : 'Menunggu Konfirmasi';
 
-    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, status) VALUES (?, ?, ?, ?, ?, ?)";
+    $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, status, vendor_status) VALUES (?, ?, ?, ?, ?, ?, ?)";
     $poStmt = $conn->prepare($poSql);
-    $poStmt->bind_param("isiids", $org_id, $po_code, $proposal_id, $supplier_id, $total_amount, $status);
+    $poStmt->bind_param("isiidss", $org_id, $po_code, $proposal_id, $supplier_id, $total_amount, $status, $vendor_status);
     $poStmt->execute();
     $po_id = $conn->insert_id;
     if ($po_id == 0) throw new Exception('Gagal membuat record PO utama.');
