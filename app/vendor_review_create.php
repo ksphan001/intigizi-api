@@ -97,7 +97,8 @@ try {
             $kitchen_name = $orgResult['name'] ?? "Dapur Gizi #" . $org_id;
 
             // Kirim ulasan ke API terpusat Marketplace
-            $ch = curl_init("http://intigizi-supplier-api.test/app/submit_review.php");
+            $supplier_api_base = rtrim($_ENV['SUPPLIER_API_URL'] ?? 'http://intigizi-supplier-api.test', '/');
+            $ch = curl_init($supplier_api_base . "/app/submit_review.php");
             $postData = json_encode([
                 'supplier_id' => $marketplace_id,
                 'kitchen_name' => $kitchen_name,

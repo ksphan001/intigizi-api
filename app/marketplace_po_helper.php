@@ -54,11 +54,13 @@ function sync_po_to_marketplace($conn, $po_id, $org_id, $supplier_id) {
         $itemsStmt->close();
 
         // 5. Definisikan Webhook URL untuk sinkronisasi status pengantaran dari marketplace
-        // Diarahkan ke host localhost / intigizi-api
-        $webhook_url = "http://localhost/intigizi-api/app/webhook_po_status.php";
+        // Membaca dari APP_URL agar bisa bekerja di lokal maupun produksi
+        $app_url = rtrim($_ENV['APP_URL'] ?? 'http://intigizi-api.test', '/');
+        $webhook_url = $app_url . "/app/webhook_po_status.php";
 
         // 6. Kirim data ke API Marketplace terpusat
-        $ch = curl_init("http://intigizi-supplier-api.test/app/marketplace_orders.php");
+        $supplier_api_base = rtrim($_ENV['SUPPLIER_API_URL'] ?? 'http://intigizi-supplier-api.test', '/');
+        $ch = curl_init($supplier_api_base . "/app/marketplace_orders.php");
         $payload = json_encode([
             'po_code' => $po['po_code'],
             'supplier_id' => $marketplace_supplier_id,

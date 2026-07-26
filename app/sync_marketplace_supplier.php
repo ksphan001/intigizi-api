@@ -20,7 +20,8 @@ $marketplace_id = (int)$data->marketplace_id;
 
 try {
     // 1. Fetch data dari API Marketplace
-    $marketplace_url = "http://intigizi-supplier-api.test/app/marketplace_suppliers.php?id=" . $marketplace_id;
+    $supplier_api_base = rtrim($_ENV['SUPPLIER_API_URL'] ?? 'http://intigizi-supplier-api.test', '/');
+    $marketplace_url = $supplier_api_base . "/app/marketplace_suppliers.php?id=" . $marketplace_id;
     
     // Gunakan cURL untuk memanggil API Marketplace
     $ch = curl_init();
@@ -157,7 +158,8 @@ try {
         $orgStmt->close();
         $kitchen_name = $orgResult['name'] ?? "Dapur IntiGizi #" . $org_id;
 
-        $ping_ch = curl_init("http://intigizi-supplier-api.test/app/register_connection.php");
+        $supplier_api_base = rtrim($_ENV['SUPPLIER_API_URL'] ?? 'http://intigizi-supplier-api.test', '/');
+        $ping_ch = curl_init($supplier_api_base . "/app/register_connection.php");
         $ping_data = json_encode([
             'kitchen_name' => $kitchen_name,
             'supplier_id' => $marketplace_id
