@@ -15,13 +15,13 @@ $org_id = (int)$userData['org_id'];
 $data = json_decode(file_get_contents("php://input"), true);
 
 // --- PERBAIKAN 2: Mengubah akses dari objek `->` menjadi array `['...']` ---
-if (!isset($data['supplier_id']) || !isset($data['items']) || !is_array($data['items']) || empty($data['items'])) {
+if (!isset($data['supplier_id']) || empty($data['supplier_id']) || !isset($data['items']) || !is_array($data['items']) || empty($data['items'])) {
     http_response_code(400);
-    echo json_encode(['message' => 'ID Supplier dan daftar item (items) wajib diisi.']);
+    echo json_encode(['message' => 'ID Supplier wajib dipilih untuk pencatatan PO yang akuntabel.']);
     exit();
 }
 
-$supplier_id = !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null;
+$supplier_id = (int)$data['supplier_id'];
 $items = $data['items'];
 $total_amount = 0;
 
