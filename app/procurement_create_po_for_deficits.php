@@ -29,16 +29,13 @@ if (count($items) === 0) {
 
 $conn->begin_transaction();
 try {
-    // 1. Kelompokkan item berdasarkan supplier_id
+    // 1. Kelompokkan item berdasarkan supplier_id (0 berarti Belanja Mandiri / Tunai)
     $supplier_groups = [];
-    $skipped_items = [];
     
     foreach ($items as $item) {
         $supplier_id = isset($item->suggested_supplier_id) ? (int)$item->suggested_supplier_id : 0;
-        // Hanya proses item yang memiliki supplier valid
         if ($supplier_id <= 0) {
-            $skipped_items[] = $item->ingredient_name;
-            continue;
+            $supplier_id = 0; // Masukkan ke kelompok Belanja Mandiri
         }
 
         if (!isset($supplier_groups[$supplier_id])) {
@@ -47,15 +44,18 @@ try {
         $supplier_groups[$supplier_id][] = $item;
     }
 
-    if (count($supplier_groups) === 0) {
-        throw new Exception("Semua bahan baku defisit tidak memiliki supplier yang terhubung. Silakan hubungkan supplier terlebih dahulu melalui menu Data Master > Supplier.", 400);
-    }
-
     $created_pos = [];
 
-    // 2. Loop setiap supplier untuk membuat PO terpisah (split PO)
+    // 2. Loop setiap kelompok supplier untuk membuat PO terpisah (split PO)
     foreach ($supplier_groups as $sup_id => $group_items) {
-        $po_code = "PO-AUTO-" . time() . "-" . rand(100, 999);
+        $supplier_id_db = $sup_id > 0 ? $sup_id : null;
+        
+        $po_code = $supplier_id_db === null 
+            ? "PO-CASH-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id . rand(10, 99)), 0, 5))
+            : "PO-AUTO-" . time() . "-" . rand(100, 999);
+            
+        $status = $supplier_id_db === null ? 'Selesai' : 'Dikirim';
+        $vendor_status = $supplier_id_db === null ? 'Selesai' : 'Menunggu Konfirmasi';
         
         // Hitung total_amount
         $total_amount = 0;
@@ -65,22 +65,24 @@ try {
             $price = (float)$item->suggested_price;
             $ing_id = (int)$item->ingredient_id;
 
-            $priceSql = "SELECT base_price, tier_qty, tier_price FROM supplier_ingredients WHERE supplier_id = ? AND ingredient_id = ? LIMIT 1";
-            $priceStmt = $conn->prepare($priceSql);
-            $priceStmt->bind_param("ii", $sup_id, $ing_id);
-            $priceStmt->execute();
-            $priceRes = $priceStmt->get_result()->fetch_assoc();
-            $priceStmt->close();
+            if ($supplier_id_db !== null) {
+                $priceSql = "SELECT base_price, tier_qty, tier_price FROM supplier_ingredients WHERE supplier_id = ? AND ingredient_id = ? LIMIT 1";
+                $priceStmt = $conn->prepare($priceSql);
+                $priceStmt->bind_param("ii", $supplier_id_db, $ing_id);
+                $priceStmt->execute();
+                $priceRes = $priceStmt->get_result()->fetch_assoc();
+                $priceStmt->close();
 
-            if ($priceRes) {
-                $base_price = (float)$priceRes['base_price'];
-                $tier_qty = (float)$priceRes['tier_qty'];
-                $tier_price = (float)$priceRes['tier_price'];
+                if ($priceRes) {
+                    $base_price = (float)$priceRes['base_price'];
+                    $tier_qty = (float)$priceRes['tier_qty'];
+                    $tier_price = (float)$priceRes['tier_price'];
 
-                if ($tier_qty > 0 && $qty >= $tier_qty && $tier_price > 0) {
-                    $price = $tier_price;
-                } else {
-                    $price = $base_price;
+                    if ($tier_qty > 0 && $qty >= $tier_qty && $tier_price > 0) {
+                        $price = $tier_price;
+                    } else {
+                        $price = $base_price;
+                    }
                 }
             }
 
@@ -96,9 +98,9 @@ try {
         }
 
         // Simpan PO Utama
-        $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, status, vendor_status) VALUES (?, ?, ?, ?, ?, 'Dikirim', 'Menunggu Konfirmasi')";
+        $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, status, vendor_status) VALUES (?, ?, ?, ?, ?, ?, ?)";
         $poStmt = $conn->prepare($poSql);
-        $poStmt->bind_param("isiid", $org_id, $po_code, $proposal_id, $sup_id, $total_amount);
+        $poStmt->bind_param("isiidss", $org_id, $po_code, $proposal_id, $supplier_id_db, $total_amount, $status, $vendor_status);
         
         if (!$poStmt->execute()) {
             throw new Exception("Gagal membuat data PO utama: " . $poStmt->error);
@@ -139,7 +141,7 @@ try {
             $po_detail = $supStmt->get_result()->fetch_assoc();
             $supStmt->close();
 
-            if ($po_detail) {
+            if ($po_detail && !empty($po_detail['supplier_id'])) {
                 sync_po_to_marketplace($conn, $po['po_id'], $org_id, (int)$po_detail['supplier_id']);
             }
         }
@@ -147,10 +149,7 @@ try {
         // Biarkan gagal tanpa menggagalkan pengembalian sukses utama
     }
 
-    $message = 'PO otomatis berhasil dibuat secara terpisah.';
-    if (count($skipped_items) > 0) {
-        $message .= ' Namun, bahan berikut dilewati karena belum memiliki supplier terhubung: ' . implode(', ', $skipped_items) . '.';
-    }
+    $message = 'Proses PO otomatis (termasuk Belanja Mandiri) berhasil dibuat secara terpisah.';
 
     http_response_code(201);
     echo json_encode([
