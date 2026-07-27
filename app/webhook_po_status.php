@@ -19,7 +19,7 @@ $status = $data->status; // pending, processing, shipped, delivered
 
 try {
     // 1. Cek apakah PO exists di DB
-    $checkSql = "SELECT id, status, vendor_status FROM purchase_orders WHERE po_code = ? LIMIT 1";
+    $checkSql = "SELECT id, status, vendor_status, organization_id, total_amount FROM purchase_orders WHERE po_code = ? LIMIT 1";
     $checkStmt = $conn->prepare($checkSql);
     $checkStmt->bind_param("s", $po_code);
     $checkStmt->execute();
@@ -80,6 +80,25 @@ try {
             $stockStmt->execute();
             $stockStmt->close();
         }
+
+        // c. Pembukuan Keuangan Transaksi PO otomatis
+        require_once __DIR__ . '/helpers/financial_helper.php';
+        $org_id = (int)$po['organization_id'];
+        $source_account_id = 2; // ID Akun 'Kas di Bank'
+        $expense_account_id = 4; // ID Akun 'Biaya Bahan Baku'
+        $system_user_id = 1; // ID user sistem default untuk webhook
+        
+        record_transaction(
+            $conn,
+            $org_id,
+            date('Y-m-d'),
+            "Pembelian bahan baku otomatis sesuai PO " . $po_code,
+            $expense_account_id,     // Debet: Biaya Bahan Baku
+            $source_account_id,      // Kredit: Kas di Bank
+            (float)$po['total_amount'],
+            $system_user_id,
+            $po_id
+        );
     }
 
     $conn->commit();
