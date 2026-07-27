@@ -17,7 +17,7 @@ if ($menu_id <= 0) {
 }
 
 try {
-    $categories_sql = "SELECT id, name FROM beneficiary_categories ORDER BY sort_order ASC, id ASC";
+    $categories_sql = "SELECT id, name, max_hpp FROM beneficiary_categories ORDER BY sort_order ASC, id ASC";
     $categories_result = $conn->query($categories_sql);
     $categories = $categories_result->fetch_all(MYSQLI_ASSOC);
 
@@ -89,7 +89,8 @@ try {
                 'total_fat' => $totals['total_fat'],
                 'total_fiber' => $totals['total_fiber'],
             ],
-            'hpp' => $totals['total_hpp']
+            'hpp' => $totals['total_hpp'],
+            'max_hpp' => (float)($category['max_hpp'] ?? 8000.00)
         ];
     }
     
