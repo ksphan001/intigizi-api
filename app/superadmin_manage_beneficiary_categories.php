@@ -20,7 +20,7 @@ $data = json_decode(file_get_contents("php://input"));
 
 try {
     if ($method === 'GET') {
-        $sql = "SELECT id, name, sort_order, max_hpp FROM beneficiary_categories ORDER BY sort_order ASC";
+        $sql = "SELECT id, name, sort_order FROM beneficiary_categories ORDER BY sort_order ASC";
         $result = $conn->query($sql);
         $categories = $result->fetch_all(MYSQLI_ASSOC);
         echo json_encode($categories);
@@ -31,19 +31,18 @@ try {
         }
         $name = $conn->real_escape_string($data->name);
         $sort_order = isset($data->sort_order) ? (int)$data->sort_order : 0;
-        $max_hpp = isset($data->max_hpp) ? (float)$data->max_hpp : 8000.00;
 
         if (isset($data->id)) { // Update
             $id = (int)$data->id;
-            $sql = "UPDATE beneficiary_categories SET name = ?, sort_order = ?, max_hpp = ? WHERE id = ?";
+            $sql = "UPDATE beneficiary_categories SET name = ?, sort_order = ? WHERE id = ?";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sidi", $name, $sort_order, $max_hpp, $id);
+            $stmt->bind_param("sii", $name, $sort_order, $id);
             $stmt->execute();
             echo json_encode(['message' => 'Kategori berhasil diperbarui.']);
         } else { // Create
-            $sql = "INSERT INTO beneficiary_categories (name, sort_order, max_hpp) VALUES (?, ?, ?)";
+            $sql = "INSERT INTO beneficiary_categories (name, sort_order) VALUES (?, ?)";
             $stmt = $conn->prepare($sql);
-            $stmt->bind_param("sid", $name, $sort_order, $max_hpp);
+            $stmt->bind_param("si", $name, $sort_order);
             $stmt->execute();
             http_response_code(201);
             echo json_encode(['message' => 'Kategori berhasil ditambahkan.', 'id' => $conn->insert_id]);
