@@ -242,7 +242,8 @@ try {
         'effective_days_count' => count($schedule),
         'total_estimated_budget' => $total_estimated_budget,
         'required_ingredients' => $required_ingredients,
-        'menu_details' => $menu_details
+        'menu_details' => $menu_details,
+        'beneficiary_counts' => $beneficiary_counts
     ];
 
     http_response_code(200);
