@@ -25,6 +25,12 @@ if (!isset($data['proposal_id']) || !isset($data['items']) || !is_array($data['i
 $proposal_id = (int)$data['proposal_id'];
 $supplier_id = !empty($data['supplier_id']) ? (int)$data['supplier_id'] : null;
 
+if ($supplier_id === null || $supplier_id <= 0) {
+    http_response_code(400);
+    echo json_encode(['message' => 'Gagal membuat PO. Pihak kedua (Supplier) wajib dipilih untuk setiap Purchase Order.']);
+    exit();
+}
+
 $conn->begin_transaction();
 
 try {
@@ -72,12 +78,9 @@ try {
         ];
     }
 
-    $po_code = $supplier_id === null 
-        ? "PO-CASH-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id . rand(10, 99)), 0, 5))
-        : "PO-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id . $supplier_id . rand(10, 99)), 0, 6));
-    
-    $status = $supplier_id === null ? 'Selesai' : 'Dikirim';
-    $vendor_status = $supplier_id === null ? 'Disetujui Dapur' : 'Menunggu Konfirmasi';
+    $po_code = "PO-" . date("Ymd") . "-" . strtoupper(substr(md5(time() . $proposal_id . $supplier_id . rand(10, 99)), 0, 6));
+    $status = 'Dikirim';
+    $vendor_status = 'Menunggu Konfirmasi';
 
     $poSql = "INSERT INTO purchase_orders (organization_id, po_code, proposal_id, supplier_id, total_amount, status, vendor_status) VALUES (?, ?, ?, ?, ?, ?, ?)";
     $poStmt = $conn->prepare($poSql);
