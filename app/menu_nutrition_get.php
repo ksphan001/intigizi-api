@@ -17,9 +17,15 @@ if ($menu_id <= 0) {
 }
 
 try {
-    $categories_sql = "SELECT id, name, max_hpp FROM beneficiary_categories ORDER BY sort_order ASC, id ASC";
-    $categories_result = $conn->query($categories_sql);
-    $categories = $categories_result->fetch_all(MYSQLI_ASSOC);
+    $categories_sql = "SELECT c.id, c.name, COALESCE(kcl.max_hpp, 8000.00) as max_hpp 
+                       FROM beneficiary_categories c 
+                       LEFT JOIN kitchen_category_limits kcl ON c.id = kcl.category_id AND kcl.organization_id = ? 
+                       ORDER BY c.sort_order ASC, c.id ASC";
+    $cat_stmt = $conn->prepare($categories_sql);
+    $cat_stmt->bind_param("i", $org_id);
+    $cat_stmt->execute();
+    $categories = $cat_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
+    $cat_stmt->close();
 
     // Query diperbarui untuk menyertakan 'nd.fiber' dan 'nd.bdd_percentage'
     $ingredients_sql = "SELECT
