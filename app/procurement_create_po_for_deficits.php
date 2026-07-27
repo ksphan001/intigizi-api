@@ -29,19 +29,26 @@ if (count($items) === 0) {
 
 $conn->begin_transaction();
 try {
-    // 1. Kelompokkan item berdasarkan supplier_id (0 berarti Belanja Mandiri / Tunai)
+    // 1. Kelompokkan item berdasarkan supplier_id (Wajib terhubung ke supplier)
     $supplier_groups = [];
+    $unmapped_ingredients = [];
     
     foreach ($items as $item) {
         $supplier_id = isset($item->suggested_supplier_id) ? (int)$item->suggested_supplier_id : 0;
         if ($supplier_id <= 0) {
-            $supplier_id = 0; // Masukkan ke kelompok Belanja Mandiri
+            $unmapped_ingredients[] = $item->ingredient_name;
+            continue;
         }
 
         if (!isset($supplier_groups[$supplier_id])) {
             $supplier_groups[$supplier_id] = [];
         }
         $supplier_groups[$supplier_id][] = $item;
+    }
+
+    // Jika ada bahan baku yang belum dipetakan ke supplier, batalkan pembuatan PO
+    if (!empty($unmapped_ingredients)) {
+        throw new Exception("Gagal membuat PO. Bahan baku berikut belum dihubungkan ke Supplier manapun: " . implode(", ", $unmapped_ingredients) . ". Silakan hubungkan supplier terlebih dahulu di menu Manajemen Bahan Baku.", 400);
     }
 
     $created_pos = [];
@@ -120,59 +127,7 @@ try {
         }
         $itemStmt->close();
 
-        // --- TAMBAHAN BARU: Jika PO Cash langsung Selesai, perbarui stok & kas saat ini juga ---
-        if ($supplier_id_db === null) {
-            // Ambil faktor konversi satuan bahan baku
-            $convSql = "SELECT pi.ingredient_id, pi.quantity, u.conversion_factor 
-                        FROM po_items pi 
-                        JOIN ingredients i ON pi.ingredient_id = i.id 
-                        JOIN units u ON i.unit_id = u.id 
-                        WHERE pi.po_id = ? AND pi.organization_id = ?";
-            $convStmt = $conn->prepare($convSql);
-            $convStmt->bind_param("ii", $po_id, $org_id);
-            $convStmt->execute();
-            $convItems = $convStmt->get_result()->fetch_all(MYSQLI_ASSOC);
-            $convStmt->close();
 
-            if (!empty($convItems)) {
-                $stockSql = "INSERT INTO stock (organization_id, ingredient_id, current_quantity) 
-                             VALUES (?, ?, ?) 
-                             ON DUPLICATE KEY UPDATE current_quantity = current_quantity + VALUES(current_quantity)";
-                $stockStmt = $conn->prepare($stockSql);
-                $transSql = "INSERT INTO stock_transactions (organization_id, ingredient_id, type, quantity, notes, po_id) 
-                             VALUES (?, ?, 'Masuk', ?, ?, ?)";
-                $transStmt = $conn->prepare($transSql);
-                $notes = "Stok masuk otomatis dari Belanja Mandiri (PO " . $po_code . ")";
-
-                foreach ($convItems as $item) {
-                    $quantity_in_base_unit = (float)$item['quantity'] * (float)$item['conversion_factor'];
-                    $stockStmt->bind_param("iid", $org_id, $item['ingredient_id'], $quantity_in_base_unit);
-                    $stockStmt->execute();
-                    $transStmt->bind_param("iidsi", $org_id, $item['ingredient_id'], $quantity_in_base_unit, $notes, $po_id);
-                    $transStmt->execute();
-                }
-                $stockStmt->close();
-                $transStmt->close();
-            }
-
-            // Catat pengeluaran keuangan kas mandiri
-            require_once __DIR__ . '/helpers/financial_helper.php';
-            $user_id = (int)$userData['id'];
-            $source_account_id = 2; // ID Akun 'Kas di Bank'
-            $expense_account_id = 4; // ID Akun 'Biaya Bahan Baku'
-            
-            record_transaction(
-                $conn,
-                $org_id,
-                date('Y-m-d'),
-                "Belanja mandiri bahan baku sesuai PO " . $po_code,
-                $expense_account_id,     // Debet: Biaya Bahan Baku
-                $source_account_id,      // Kredit: Kas di Bank
-                (float)$total_amount,
-                $user_id,
-                $po_id
-            );
-        }
 
         $created_pos[] = [
             'po_id' => $po_id,
