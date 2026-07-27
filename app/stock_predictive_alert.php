@@ -143,9 +143,26 @@ try {
 
         $current_qty = $stockRes ? (float)$stockRes['current_quantity'] : 0.00;
 
-        // Jika kebutuhan > stok riil, maka defisit
-        if ($qty_needed > $current_qty) {
-            $deficit_qty = $qty_needed - $current_qty;
+        // --- TAMBAHAN BARU: Ambil jumlah yang sedang dipesan (outstanding PO / pending) ---
+        // Menghitung barang yang sudah di-PO tapi belum Selesai agar tidak memicu PO ganda.
+        $pendingSql = "SELECT SUM(pi.quantity) as pending_qty 
+                       FROM po_items pi 
+                       JOIN purchase_orders po ON pi.po_id = po.id 
+                       WHERE pi.ingredient_id = ? AND po.organization_id = ? AND po.status != 'Selesai'";
+        $pendingStmt = $conn->prepare($pendingSql);
+        $pendingStmt->bind_param("ii", $id, $org_id);
+        $pendingStmt->execute();
+        $pendingRes = $pendingStmt->get_result()->fetch_assoc();
+        $pendingStmt->close();
+        
+        $pending_qty = $pendingRes ? (float)$pendingRes['pending_qty'] : 0.00;
+        
+        // Total stok virtual = Stok riil + Stok yang sedang dalam pemesanan
+        $virtual_available = $current_qty + $pending_qty;
+
+        // Jika kebutuhan > total stok virtual, maka defisit
+        if ($qty_needed > $virtual_available) {
+            $deficit_qty = $qty_needed - $virtual_available;
 
             // Cari supplier lokal termurah untuk bahan baku ini
             $supSql = "
