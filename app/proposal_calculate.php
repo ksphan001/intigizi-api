@@ -164,10 +164,13 @@ try {
             $cat_id = $category['id'];
             $hpp = 0;
             $nutrition = ['calories' => 0, 'protein' => 0, 'carbohydrates' => 0, 'fat' => 0, 'fiber' => 0];
+            $ingredients_breakdown = [];
 
             foreach ($ingredients as $ingredient) {
                 $portions = json_decode($ingredient['portions_json'], true);
                 $portion_for_cat_net = (is_array($portions) && isset($portions[$cat_id])) ? (float)$portions[$cat_id] : 0;
+
+                if ($portion_for_cat_net <= 0) continue; // Abaikan bahan yang porsinya 0 untuk kategori ini
 
                 // --- LOGIKA BDD ---
                 $bdd_factor = (float)($ingredient['bdd_percentage'] ?? 1.00);
@@ -176,10 +179,24 @@ try {
                 // ------------------
                 
                 // Hitung HPP (berdasarkan BERAT KOTOR)
+                $price_per_gram = 0;
+                $ingredient_cost = 0;
                 if ($ingredient['conversion_factor'] > 0) {
                     $price_per_gram = (float)$ingredient['latest_price'] / (float)$ingredient['conversion_factor'];
-                    $hpp += $portion_for_cat_gross * $price_per_gram;
+                    $ingredient_cost = $portion_for_cat_gross * $price_per_gram;
+                    $hpp += $ingredient_cost;
                 }
+
+                // Masukkan ke breakdown bahan
+                $ingredients_breakdown[] = [
+                    'ingredient_name' => $ingredient['ingredient_name'],
+                    'net_weight_g' => round($portion_for_cat_net, 2),
+                    'gross_weight_g' => round($portion_for_cat_gross, 2),
+                    'bdd' => $bdd_factor * 100,
+                    'price_per_unit' => (float)$ingredient['latest_price'],
+                    'unit_symbol' => $ingredient['unit_symbol'],
+                    'cost' => $ingredient_cost
+                ];
 
                 // Hitung Gizi (berdasarkan BERAT BERSIH)
                 $nutri = $nutritionData[$ingredient['ingredient_id']] ?? null;
@@ -191,7 +208,13 @@ try {
                     $nutrition['fiber'] += ((float)$nutri['fiber'] / 100) * $portion_for_cat_net;
                 }
             }
-            $details_per_category[] = ['category_id' => $cat_id, 'category_name' => $category['name'], 'hpp' => $hpp, 'nutrition' => $nutrition];
+            $details_per_category[] = [
+                'category_id' => $cat_id, 
+                'category_name' => $category['name'], 
+                'hpp' => $hpp, 
+                'nutrition' => $nutrition,
+                'ingredients_breakdown' => $ingredients_breakdown
+            ];
         }
         $menu_details[] = ['menu_id' => $menuId, 'menu_name' => $menu_name, 'details_per_category' => $details_per_category];
     }
