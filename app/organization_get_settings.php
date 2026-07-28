@@ -33,8 +33,8 @@ try {
                 o.pic_whatsapp,
                 dp.name as kitchen_name, 
                 dp.address as kitchen_address,
-                dp.latitude,
-                dp.longitude
+                COALESCE(dp.latitude, o.latitude) as latitude,
+                COALESCE(dp.longitude, o.longitude) as longitude
             FROM organizations o
             LEFT JOIN distribution_points dp ON o.id = dp.organization_id AND dp.is_main_kitchen = 1
             WHERE o.id = ?

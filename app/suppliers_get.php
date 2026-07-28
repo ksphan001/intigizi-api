@@ -7,16 +7,30 @@ require_once __DIR__ . '/auth_middleware.php';
 $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
-// 1. Ambil koordinat Dapur Utama
-$kitchenSql = "SELECT latitude, longitude FROM distribution_points WHERE organization_id = ? AND is_main_kitchen = 1 LIMIT 1";
+// 1. Ambil koordinat Dapur Utama (coba dari distribution_points dulu, fallback ke organizations)
+$kitchenSql = "SELECT dp.latitude, dp.longitude 
+               FROM distribution_points dp 
+               WHERE dp.organization_id = ? AND dp.is_main_kitchen = 1 
+               AND dp.latitude IS NOT NULL AND dp.longitude IS NOT NULL 
+               LIMIT 1";
 $kStmt = $conn->prepare($kitchenSql);
 $kStmt->bind_param("i", $org_id);
 $kStmt->execute();
 $kitchen = $kStmt->get_result()->fetch_assoc();
 $kStmt->close();
 
-$k_lat = $kitchen ? (float)$kitchen['latitude'] : null;
-$k_lng = $kitchen ? (float)$kitchen['longitude'] : null;
+if (!$kitchen) {
+    // Fallback: ambil dari tabel organizations jika distribution_point tidak ada koordinatnya
+    $orgSql = "SELECT latitude, longitude FROM organizations WHERE id = ? AND latitude IS NOT NULL LIMIT 1";
+    $oStmt = $conn->prepare($orgSql);
+    $oStmt->bind_param("i", $org_id);
+    $oStmt->execute();
+    $kitchen = $oStmt->get_result()->fetch_assoc();
+    $oStmt->close();
+}
+
+$k_lat = ($kitchen && $kitchen['latitude']) ? (float)$kitchen['latitude'] : null;
+$k_lng = ($kitchen && $kitchen['longitude']) ? (float)$kitchen['longitude'] : null;
 
 // Helper Haversine Distance
 function calculate_distance($lat1, $lon1, $lat2, $lon2) {
