@@ -8,7 +8,9 @@ require_once __DIR__ . '/auth_middleware.php';
 $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
-$data = json_decode(file_get_contents("php://input"));
+if (!isset($data)) {
+    $data = json_decode(file_get_contents("php://input"));
+}
 
 if (!isset($data->marketplace_id)) {
     http_response_code(400);
