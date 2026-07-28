@@ -5,15 +5,15 @@
 function sync_po_to_marketplace($conn, $po_id, $org_id, $supplier_id) {
     try {
         // 1. Cek apakah supplier ini adalah supplier dari marketplace (memiliki marketplace_id)
-        $supSql = "SELECT marketplace_id FROM suppliers WHERE id = ? LIMIT 1";
+        $supSql = "SELECT marketplace_id, is_local_override FROM suppliers WHERE id = ? LIMIT 1";
         $supStmt = $conn->prepare($supSql);
         $supStmt->bind_param("i", $supplier_id);
         $supStmt->execute();
         $sup = $supStmt->get_result()->fetch_assoc();
         $supStmt->close();
 
-        if (!$sup || empty($sup['marketplace_id'])) {
-            return false; // Bukan supplier marketplace
+        if (!$sup || empty($sup['marketplace_id']) || (int)($sup['is_local_override'] ?? 0) === 1) {
+            return false; // Bukan supplier marketplace ATAU sedang di-override lokal
         }
 
         $marketplace_supplier_id = (int)$sup['marketplace_id'];
