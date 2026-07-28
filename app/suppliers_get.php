@@ -8,7 +8,7 @@ $userData = verify_jwt_token();
 $org_id = (int)$userData['org_id'];
 
 $sql = "SELECT
-            s.id, s.supplier_name, s.address, s.contact_person, s.coverage_radius_km, s.coverage_area_desc, s.latitude, s.longitude, s.phone_number as supplier_phone, s.is_verified, s.marketplace_id,
+            s.id, s.supplier_name, s.address, s.contact_person, s.coverage_radius_km, s.coverage_area_desc, s.latitude, s.longitude, s.phone_number as supplier_phone, s.is_verified, s.marketplace_id, s.is_local_override,
             s.average_rating, s.review_count, s.sla_score, s.avg_process_time_hours,
             u.id as user_id, u.username, u.email, u.phone_number
         FROM suppliers s
