@@ -72,7 +72,7 @@ try {
     if ($existing) {
         $local_supplier_id = (int)$existing['id'];
         // Update
-        $upSql = "UPDATE suppliers SET supplier_name = ?, address = ?, contact_person = ?, phone_number = ?, latitude = ?, longitude = ?, coverage_radius_km = ?, is_verified = ?, average_rating = ?, review_count = ?, sla_score = ?, avg_process_time_hours = ? WHERE id = ?";
+        $upSql = "UPDATE suppliers SET supplier_name = ?, address = ?, contact_person = ?, phone_number = ?, latitude = ?, longitude = ?, coverage_radius_km = ?, is_verified = ?, average_rating = ?, review_count = ?, sla_score = ?, avg_process_time_hours = ?, is_local_override = 0 WHERE id = ?";
         $upStmt = $conn->prepare($upSql);
         $upStmt->bind_param("ssssssiidiidi", $supplier_name, $address, $contact_person, $phone_number, $latitude, $longitude, $coverage_radius_km, $is_verified, $average_rating, $review_count, $sla_score, $avg_process_time, $local_supplier_id);
         $upStmt->execute();
