@@ -27,14 +27,14 @@ if ($supplier_id <= 0) {
 
 // Cek apakah supplier ini berasal dari marketplace untuk tindakan modifikasi (tulis/save)
 if ($action !== 'get') {
-    $checkSql = "SELECT marketplace_id FROM suppliers WHERE id = ? AND organization_id = ? LIMIT 1";
+    $checkSql = "SELECT marketplace_id, is_local_override FROM suppliers WHERE id = ? AND organization_id = ? LIMIT 1";
     $checkStmt = $conn->prepare($checkSql);
     $checkStmt->bind_param("ii", $supplier_id, $org_id);
     $checkStmt->execute();
     $existing = $checkStmt->get_result()->fetch_assoc();
     $checkStmt->close();
 
-    if ($existing && !empty($existing['marketplace_id'])) {
+    if ($existing && !empty($existing['marketplace_id']) && (int)($existing['is_local_override'] ?? 0) === 0) {
         http_response_code(403);
         echo json_encode(['message' => 'Akses ditolak. Katalog supplier dari Marketplace terpusat tidak dapat diubah dari dapur lokal.']);
         exit();
